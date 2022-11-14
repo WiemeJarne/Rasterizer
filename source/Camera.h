@@ -45,10 +45,22 @@ namespace dae
 		{
 			//TODO W1
 			//ONB => invViewMatrix
+			const Vector3 right{ Vector3::Cross(up, forward).Normalized() };
+			const Vector3 up{ Vector3::Cross(forward, right).Normalized() };
+			invViewMatrix =
+			{
+				{right, 0},
+				{up, 0},
+				{forward, 0},
+				{origin, 1}
+			};
+
 			//Inverse(ONB) => ViewMatrix
+			viewMatrix = invViewMatrix.Inverse();
 
 			//ViewMatrix => Matrix::CreateLookAtLH(...) [not implemented yet]
 			//DirectX Implementation => https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixlookatlh
+			viewMatrix.CreateLookAtLH(origin, forward, up);
 		}
 
 		void CalculateProjectionMatrix()
