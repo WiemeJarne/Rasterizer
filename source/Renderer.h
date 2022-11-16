@@ -40,7 +40,7 @@ namespace dae
 		SDL_Surface* m_pBackBuffer{ nullptr };
 		uint32_t* m_pBackBufferPixels{};
 
-		//float* m_pDepthBufferPixels{};
+		float* m_pDepthBufferPixels{};
 
 		Camera m_Camera{};
 
@@ -53,5 +53,8 @@ namespace dae
 		void W1_Part2() const;
 		void W1_Part3() const;
 		void W1_Part4() const;
+		void W1_Part5() const;
+
+		void W2_Part1() const;
 	};
 }

@@ -22,7 +22,13 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	m_pBackBuffer = SDL_CreateRGBSurface(0, m_Width, m_Height, 32, 0, 0, 0, 0);
 	m_pBackBufferPixels = (uint32_t*)m_pBackBuffer->pixels;
 
-	//m_pDepthBufferPixels = new float[m_Width * m_Height];
+	const int amountOfPixels{ m_Width * m_Height };
+	m_pDepthBufferPixels = new float[amountOfPixels];
+	//fill depth buffer with ifiniy as value
+	for (int index{}; index < amountOfPixels; ++index)
+	{
+		m_pDepthBufferPixels[index] = INFINITY;
+	}
 
 	//Initialize Camera
 	m_Camera.Initialize(60.f, { .0f,.0f,-10.f });
@@ -30,7 +36,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 
 Renderer::~Renderer()
 {
-	//delete[] m_pDepthBufferPixels;
+	delete[] m_pDepthBufferPixels;
 }
 
 void Renderer::Update(Timer* pTimer)
@@ -41,7 +47,10 @@ void Renderer::Update(Timer* pTimer)
 void Renderer::Render()
 {
 	//@START
-	SDL_FillRect(m_pBackBuffer, NULL, 0x000000);
+	Uint8 redValue{ 100 };
+	Uint8 greenValue{ 100 };
+	Uint8 blueValue{ 100 };
+	SDL_FillRect(m_pBackBuffer, NULL, SDL_MapRGB( m_pBackBuffer->format, redValue, greenValue, blueValue));
 	//Lock BackBuffer
 	SDL_LockSurface(m_pBackBuffer);
 
@@ -49,27 +58,8 @@ void Renderer::Render()
 	//W1_Part1();
 	//W1_Part2();
 	//W1_Part3();
-	W1_Part4();
-	
-	//for (int px{}; px < m_Width; ++px)
-	//{
-	//	for (int py{}; py < m_Height; ++py)
-	//	{
-	//		float gradient = px / static_cast<float>(m_Width);
-	//		gradient += py / static_cast<float>(m_Width);
-	//		gradient /= 2.0f;
-
-	//		ColorRGB finalColor{ gradient, gradient, gradient };
-
-	//		//Update Color in Buffer
-	//		finalColor.MaxToOne();
-
-	//		m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
-	//			static_cast<uint8_t>(finalColor.r * 255),
-	//			static_cast<uint8_t>(finalColor.g * 255),
-	//			static_cast<uint8_t>(finalColor.b * 255));
-	//	}
-	//}
+	//W1_Part4();
+	W1_Part5();
 
 	//@END
 	//Update SDL Surface
@@ -147,10 +137,6 @@ void Renderer::W1_Part1() const
 				&& Vector2::Cross(edge2, p1ToPixel) > 0
 				&& Vector2::Cross(edge3, p2ToPixel) > 0)
 			{
-				float gradient = px / static_cast<float>(m_Width);
-				gradient += py / static_cast<float>(m_Width);
-				gradient /= 2.0f;
-
 				ColorRGB finalColor{ 1, 1, 1 };
 
 				//Update Color in Buffer
@@ -292,12 +278,18 @@ void Renderer::W1_Part4() const
 	std::vector<Vertex> transformed_vertices_world{};
 	VertexTransformationFunction(vertices_world, transformed_vertices_world);
 
-	for (int px{}; px < m_Width; ++px)
+	const int amountOfPixels{ m_Width * m_Height };
+	for (int index{}; index < amountOfPixels; ++index)
 	{
-		for (int py{}; py < m_Height; ++py)
+		m_pDepthBufferPixels[index] = INFINITY;
+	}
+	
+	const int amountOfTriangles{ static_cast<int>(transformed_vertices_world.size()) / 3 };
+	for (int index{}; index < amountOfTriangles; ++index)
+	{
+		for (int px{}; px < m_Width; ++px)
 		{
-			int amountOfTriangles{ static_cast<int>(transformed_vertices_world.size()) / 3 };
-			for (int index{}; index < amountOfTriangles; ++index)
+			for (int py{}; py < m_Height; ++py)
 			{
 				Vector2 pixel{ static_cast<float>(px), static_cast<float>(py) };
 
@@ -327,7 +319,21 @@ void Renderer::W1_Part4() const
 					continue;
 				}
 
-				ColorRGB finalColor{ transformed_vertices_world[index * 3].color * w0 + transformed_vertices_world[index * 3 + 1].color * w1 + transformed_vertices_world[index * 3 + 2].color * w2 };
+				const int pixelIndex{ py * m_Width + px };
+				const float depthValue{  transformed_vertices_world[index * 3].position.z * w0
+									   + transformed_vertices_world[index * 3 + 1].position.z * w1
+									   + transformed_vertices_world[index * 3 + 2].position.z * w2 };
+
+				if (depthValue <= m_pDepthBufferPixels[pixelIndex])
+				{
+					m_pDepthBufferPixels[pixelIndex] = depthValue;
+				}
+				else continue;
+
+				ColorRGB finalColor
+				{ transformed_vertices_world[index * 3].color * w0
+				  + transformed_vertices_world[index * 3 + 1].color * w1
+				  + transformed_vertices_world[index * 3 + 2].color * w2 };
 
 				//Update Color in Buffer
 				finalColor.MaxToOne();
@@ -337,7 +343,99 @@ void Renderer::W1_Part4() const
 					static_cast<uint8_t>(finalColor.g * 255),
 					static_cast<uint8_t>(finalColor.b * 255));
 			}
-			
+		}
+	}
+}
+
+void Renderer::W1_Part5() const
+{
+	std::vector<Vertex> vertices_world
+	{
+		//triangle 0
+		{{0.f, 2.f, 0.f}, {1.f, 0.f, 0.f}},
+		{{1.5f, -1.f, 0.f}, {1.f, 0.f, 0.f}},
+		{{-1.5f, -1.f, 0.f}, {1.f, 0.f, 0.f}},
+
+		//triangle 1
+		{{0.f, 4.f, 2.f}, {1.f, 0.f, 0.f}},
+		{{3.f, -2.f, 2.f}, {0.f, 1.f, 0.f}},
+		{{-3.f, -2.f, 2.f}, {0.f, 0.f, 1.f}}
+	};
+	std::vector<Vertex> transformed_vertices_world{};
+	VertexTransformationFunction(vertices_world, transformed_vertices_world);
+
+	const int amountOfPixels{ m_Width * m_Height };
+	for (int index{}; index < amountOfPixels; ++index)
+	{
+		m_pDepthBufferPixels[index] = INFINITY;
+	}
+
+	const int amountOfTriangles{ static_cast<int>(transformed_vertices_world.size()) / 3 };
+	for (int index{}; index < amountOfTriangles; ++index)
+	{
+		TriangleBoundingBox boudingBox{};
+		boudingBox.Grow({ transformed_vertices_world[index * 3].position.x, transformed_vertices_world[index * 3].position.y });
+		boudingBox.Grow({ transformed_vertices_world[index * 3 + 1].position.x, transformed_vertices_world[index * 3 + 1].position.y });
+		boudingBox.Grow({ transformed_vertices_world[index * 3 + 2].position.x, transformed_vertices_world[index * 3 + 2].position.y });
+
+		for (int px{}; px < m_Width; ++px)
+		{
+			for (int py{}; py < m_Height; ++py)
+			{
+				Vector2 pixel{ static_cast<float>(px), static_cast<float>(py) };
+
+				if (!boudingBox.IsPointInBoundingBox(pixel)) continue;
+
+				Vector2 v0{ transformed_vertices_world[index * 3].position.x, transformed_vertices_world[index * 3].position.y };
+				Vector2 v1{ transformed_vertices_world[index * 3 + 1].position.x, transformed_vertices_world[index * 3 + 1].position.y };
+				Vector2 v2{ transformed_vertices_world[index * 3 + 2].position.x, transformed_vertices_world[index * 3 + 2].position.y };
+
+				float area{ Vector2::Cross(v1 - v0, v2 - v0) / 2.f };
+				float w0{ (Vector2::Cross(v2 - v1, pixel - v1) / 2.f) / area };
+
+				if (w0 < 0)
+				{
+					continue;
+				}
+
+				float w1{ (Vector2::Cross(v0 - v2, pixel - v2) / 2.f) / area };
+
+				if (w1 < 0)
+				{
+					continue;
+				}
+
+				float w2{ (Vector2::Cross(v1 - v0, pixel - v0) / 2.f) / area };
+
+				if (w2 < 0)
+				{
+					continue;
+				}
+
+				const int pixelIndex{ py * m_Width + px };
+				const float depthValue{ transformed_vertices_world[index * 3].position.z * w0
+									   + transformed_vertices_world[index * 3 + 1].position.z * w1
+									   + transformed_vertices_world[index * 3 + 2].position.z * w2 };
+
+				if (depthValue <= m_pDepthBufferPixels[pixelIndex])
+				{
+					m_pDepthBufferPixels[pixelIndex] = depthValue;
+				}
+				else continue;
+
+				ColorRGB finalColor
+				{ transformed_vertices_world[index * 3].color * w0
+				  + transformed_vertices_world[index * 3 + 1].color * w1
+				  + transformed_vertices_world[index * 3 + 2].color * w2 };
+
+				//Update Color in Buffer
+				finalColor.MaxToOne();
+
+				m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+					static_cast<uint8_t>(finalColor.r * 255),
+					static_cast<uint8_t>(finalColor.g * 255),
+					static_cast<uint8_t>(finalColor.b * 255));
+			}
 		}
 	}
 }
