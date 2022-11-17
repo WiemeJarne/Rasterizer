@@ -93,7 +93,7 @@ void Renderer::VertexTransformationFunction(const std::vector<Vertex>& vertices_
 		projectedVertex.color = vertex.color;
 
 		//add the vertex to vertices_out
-		vertices_out.push_back(projectedVertex);
+		vertices_out.emplace_back(projectedVertex);
 	}
 }
 
