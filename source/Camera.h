@@ -46,6 +46,12 @@ namespace dae
 		void CalculateViewMatrix()
 		{
 			//DirectX Implementation => https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixlookatlh
+
+			const Matrix result{ Matrix::CreateRotation(totalPitch, totalYaw, 0) };
+			forward = result.TransformVector(Vector3::UnitZ).Normalized();
+			right = Vector3::Cross(Vector3::UnitY, forward).Normalized();
+			up = Vector3::Cross(forward, right).Normalized();
+
 			viewMatrix = Matrix::CreateLookAtLH(origin, forward, Vector3::UnitY);
 			invViewMatrix = Matrix::Inverse(viewMatrix);
 		}
@@ -155,10 +161,6 @@ namespace dae
 				{
 					totalYaw -= cameraRotationSpeed * elapsedSec;
 				}
-
-				const Matrix result{ Matrix::CreateRotation(totalPitch, totalYaw, 0) };
-				forward = result.TransformVector(Vector3::UnitZ);
-				forward.Normalize();
 			}
 			else if (mouseState & SDL_BUTTON_RMASK)
 			{
@@ -181,10 +183,6 @@ namespace dae
 				{
 					totalPitch += cameraRotationSpeed * elapsedSec;
 				}
-
-				const Matrix result{ Matrix::CreateRotation(totalPitch, totalYaw, 0) };
-				forward = result.TransformVector(Vector3::UnitZ);
-				forward.Normalize();
 			}
 
 			//Update Matrices

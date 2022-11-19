@@ -8,7 +8,7 @@
 #include "Matrix.h"
 #include "Texture.h"
 #include "Utils.h"
-
+#include <iostream>
 using namespace dae;
 
 Renderer::Renderer(SDL_Window* pWindow) :
@@ -30,6 +30,8 @@ Renderer::Renderer(SDL_Window* pWindow) :
 		m_pDepthBufferPixels[index] = INFINITY;
 	}
 
+	m_pTexture = Texture::LoadFromFile("Resources/uv_grid_2.png");
+
 	//Initialize Camera
 	m_Camera.Initialize(60.f, { .0f,.0f,-10.f });
 }
@@ -37,6 +39,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 Renderer::~Renderer()
 {
 	delete[] m_pDepthBufferPixels;
+	delete m_pTexture;
 }
 
 void Renderer::Update(Timer* pTimer)
@@ -59,7 +62,11 @@ void Renderer::Render()
 	//W1_Part2();
 	//W1_Part3();
 	//W1_Part4();
-	W1_Part5();
+	//W1_Part5();
+
+	//W2_Part1();
+	//W2_Part2();
+	W2_Part3();
 
 	//@END
 	//Update SDL Surface
@@ -91,6 +98,8 @@ void Renderer::VertexTransformationFunction(const std::vector<Vertex>& vertices_
 
 		//set color of the vertex
 		projectedVertex.color = vertex.color;
+		//set uv of the vertex
+		projectedVertex.uv = vertex.uv;
 
 		//add the vertex to vertices_out
 		vertices_out.emplace_back(projectedVertex);
@@ -161,7 +170,6 @@ void Renderer::W1_Part2() const
 	};
 	std::vector<Vertex> transformed_vertices_world{};
 	VertexTransformationFunction(vertices_world, transformed_vertices_world);
-
 
 	for (int px{}; px < m_Width; ++px)
 	{
@@ -435,6 +443,487 @@ void Renderer::W1_Part5() const
 					static_cast<uint8_t>(finalColor.r * 255),
 					static_cast<uint8_t>(finalColor.g * 255),
 					static_cast<uint8_t>(finalColor.b * 255));
+			}
+		}
+	}
+}
+
+void Renderer::W2_Part1() const
+{
+	std::vector<Mesh> meshes_world
+	{
+		Mesh
+		{
+			{
+				Vertex{{-3.f, 3.f, -2.f}},
+				Vertex{{0.f, 3.f, -2.f}},
+				Vertex{{3.f, 3.f, -2.f}},
+				Vertex{{-3.f, 0.f, -2.f}},
+				Vertex{{0.f, 0.f, -2.f}},
+				Vertex{{3.f, 0.f, -2.f}},
+				Vertex{{-3.f, -3.f, -2.f}},
+				Vertex{{0.f, -3.f, -2.f}},
+				Vertex{{3.f, -3.f, -2.f}}
+			},
+
+		//1 of the 2 below indices has to be uncommitted together with the PrimitiveTropology::...
+
+		//indices for triangleList
+			{
+				3, 0, 1,	1, 4, 3,	4, 1, 2,
+				2, 5, 4,	6, 3, 4,	4, 7, 6,
+				7, 4, 5,	5, 8, 7
+			},
+
+			PrimitiveTopology::TriangeList
+			
+		//indices for triangleStrip
+			/*{
+				3, 0, 4, 1, 5, 2,
+				2, 6,
+				6, 3, 7, 4, 8, 5
+			},
+
+			PrimitiveTopology::TriangleStrip*/
+		}
+	};
+
+	const int amountOfPixels{ m_Width * m_Height };
+	for (int index{}; index < amountOfPixels; ++index)
+	{
+		m_pDepthBufferPixels[index] = INFINITY;
+	}
+
+	const int amountOfMeshes{ static_cast<int>(meshes_world.size()) };
+	for (int meshIndex{}; meshIndex < amountOfMeshes; ++meshIndex)
+	{
+		Mesh mesh{ meshes_world[meshIndex] };
+
+		int amountOfTriangles{};
+
+		if (mesh.primitiveTopology == PrimitiveTopology::TriangeList)
+		{
+			amountOfTriangles = static_cast<int>(meshes_world[meshIndex].indices.size()) / 3;
+		}
+		else if(mesh.primitiveTopology == PrimitiveTopology::TriangleStrip)
+		{
+			amountOfTriangles = static_cast<int>(meshes_world[meshIndex].indices.size()) / 3;
+			amountOfTriangles *= 2;
+		}
+
+		std::vector<Vertex> transformed_vertices_world{};
+		VertexTransformationFunction(mesh.vertices, transformed_vertices_world);
+
+		for (int triangleIndex{}; triangleIndex < amountOfTriangles; ++triangleIndex)
+		{
+			//the indices to get the index form the mesh.indices vector
+			int vertex0Index{}; 
+			int vertex1Index{};
+			int vertex2Index{};
+
+			if (mesh.primitiveTopology == PrimitiveTopology::TriangeList)
+			{
+				vertex0Index = triangleIndex * 3;
+				vertex1Index = triangleIndex * 3 + 1;
+				vertex2Index = triangleIndex * 3 + 2;
+			}
+			else if (mesh.primitiveTopology == PrimitiveTopology::TriangleStrip)
+			{
+				vertex0Index = triangleIndex;
+				vertex1Index = triangleIndex + 1;
+				vertex2Index = triangleIndex + 2;
+
+				if (mesh.indices[vertex0Index] == mesh.indices[vertex1Index]
+					|| mesh.indices[vertex1Index] == mesh.indices[vertex2Index]
+					|| mesh.indices[vertex2Index] == mesh.indices[vertex0Index])
+				{
+					++amountOfTriangles; //no triangle has been rendered so increase amount of triangles otherwise the bottom halve of the mesh won't be rendered
+					continue;
+				}
+			}
+
+			const Vertex& vertex0{ transformed_vertices_world[mesh.indices[vertex0Index]] };
+			const Vertex& vertex1{ transformed_vertices_world[mesh.indices[vertex1Index]] };
+			const Vertex& vertex2{ transformed_vertices_world[mesh.indices[vertex2Index]] };
+
+			Vector2 v0{ vertex0.position.x, vertex0.position.y };
+			Vector2 v1{ vertex1.position.x, vertex1.position.y };
+			Vector2 v2{ vertex2.position.x, vertex2.position.y };
+
+			TriangleBoundingBox boudingBox{};
+			boudingBox.screenWith = m_Width;
+			boudingBox.screenHeight = m_Height;
+			boudingBox.Grow(v0);
+			boudingBox.Grow(v1);
+			boudingBox.Grow(v2);
+
+			for (int px{ static_cast<int>(boudingBox.min.x) }; px < boudingBox.max.x; ++px)
+			{
+				for (int py{ static_cast<int>(boudingBox.min.y) }; py < boudingBox.max.y; ++py)
+				{
+					Vector2 pixel{ static_cast<float>(px), static_cast<float>(py) };
+
+					const float area{ Vector2::Cross(v1 - v0, v2 - v0) / 2.f };
+					const float w0{ (Vector2::Cross(v2 - v1, pixel - v1) / 2.f) / area };
+
+					if (w0 < 0)
+					{
+						continue;
+					}
+
+					const float w1{ (Vector2::Cross(v0 - v2, pixel - v2) / 2.f) / area };
+
+					if (w1 < 0)
+					{
+						continue;
+					}
+
+					const float w2{ (Vector2::Cross(v1 - v0, pixel - v0) / 2.f) / area };
+
+					if (w2 < 0)
+					{
+						continue;
+					}
+
+					const int pixelIndex{ py * m_Width + px };
+					const float depthValue{  vertex0.position.z * w0
+										   + vertex1.position.z * w1
+										   + vertex2.position.z * w2 };
+
+					if (depthValue <= m_pDepthBufferPixels[pixelIndex])
+					{
+						m_pDepthBufferPixels[pixelIndex] = depthValue;
+					}
+					else continue;
+
+					ColorRGB finalColor
+					{   vertex0.color * w0
+					  + vertex1.color * w1
+					  + vertex2.color * w2 };
+
+					//Update Color in Buffer
+					finalColor.MaxToOne();
+
+					m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+						static_cast<uint8_t>(finalColor.r * 255),
+						static_cast<uint8_t>(finalColor.g * 255),
+						static_cast<uint8_t>(finalColor.b * 255));
+				}
+			}
+		}
+	}
+}
+
+void Renderer::W2_Part2() const
+{
+	std::vector<Mesh> meshes_world
+	{
+		Mesh
+		{
+			{
+				Vertex{ { -3.f, 3.f, -2.f }, {}, { 0.f, 0.f } },
+				Vertex{ { 0.f, 3.f, -2.f }, {}, { 0.5f, 0.f } },
+				Vertex{ { 3.f, 3.f, -2.f }, {}, { 1.f, 0.f } },
+				Vertex{ { -3.f, 0.f, -2.f }, {}, { 0.f, 0.5f } },
+				Vertex{ { 0.f, 0.f, -2.f }, {}, { 0.5f, 0.5f } },
+				Vertex{ { 3.f, 0.f, -2.f }, {}, { 1.f, 0.5f } },
+				Vertex{ { -3.f, -3.f, -2.f }, {}, { 0.f, 1.f } },
+				Vertex{ { 0.f, -3.f, -2.f }, {}, { 0.5f, 1.f } },
+				Vertex{ { 3.f, -3.f, -2.f }, {}, { 1.f, 1.f } }
+			},
+
+			{
+				3, 0, 1,	1, 4, 3,	4, 1, 2,
+				2, 5, 4,	6, 3, 4,	4, 7, 6,
+				7, 4, 5,	5, 8, 7
+			},
+
+			PrimitiveTopology::TriangeList
+		}
+	};
+
+	const int amountOfPixels{ m_Width * m_Height };
+	for (int index{}; index < amountOfPixels; ++index)
+	{
+		m_pDepthBufferPixels[index] = INFINITY;
+	}
+
+	const int amountOfMeshes{ static_cast<int>(meshes_world.size()) };
+	for (int meshIndex{}; meshIndex < amountOfMeshes; ++meshIndex)
+	{
+		Mesh mesh{ meshes_world[meshIndex] };
+
+		int amountOfTriangles{};
+
+		if (mesh.primitiveTopology == PrimitiveTopology::TriangeList)
+		{
+			amountOfTriangles = static_cast<int>(meshes_world[meshIndex].indices.size()) / 3;
+		}
+		else if (mesh.primitiveTopology == PrimitiveTopology::TriangleStrip)
+		{
+			amountOfTriangles = static_cast<int>(meshes_world[meshIndex].indices.size()) / 3;
+			amountOfTriangles *= 2;
+		}
+
+		std::vector<Vertex> transformed_vertices_world{};
+		VertexTransformationFunction(mesh.vertices, transformed_vertices_world);
+
+		for (int triangleIndex{}; triangleIndex < amountOfTriangles; ++triangleIndex)
+		{
+			//the indices to get the index form the mesh.indices vector
+			int vertex0Index{};
+			int vertex1Index{};
+			int vertex2Index{};
+
+			if (mesh.primitiveTopology == PrimitiveTopology::TriangeList)
+			{
+				vertex0Index = triangleIndex * 3;
+				vertex1Index = triangleIndex * 3 + 1;
+				vertex2Index = triangleIndex * 3 + 2;
+			}
+			else if (mesh.primitiveTopology == PrimitiveTopology::TriangleStrip)
+			{
+				vertex0Index = triangleIndex;
+				vertex1Index = triangleIndex + 1;
+				vertex2Index = triangleIndex + 2;
+
+				if (mesh.indices[vertex0Index] == mesh.indices[vertex1Index]
+					|| mesh.indices[vertex1Index] == mesh.indices[vertex2Index]
+					|| mesh.indices[vertex2Index] == mesh.indices[vertex0Index])
+				{
+					++amountOfTriangles; //no triangle has been rendered so increase amount of triangles otherwise the bottom halve of the mesh won't be rendered
+					continue;
+				}
+			}
+
+			const Vertex& vertex0{ transformed_vertices_world[mesh.indices[vertex0Index]] };
+			const Vertex& vertex1{ transformed_vertices_world[mesh.indices[vertex1Index]] };
+			const Vertex& vertex2{ transformed_vertices_world[mesh.indices[vertex2Index]] };
+
+			Vector2 v0{ vertex0.position.x, vertex0.position.y };
+			Vector2 v1{ vertex1.position.x, vertex1.position.y };
+			Vector2 v2{ vertex2.position.x, vertex2.position.y };
+
+			TriangleBoundingBox boudingBox{};
+			boudingBox.screenWith = m_Width;
+			boudingBox.screenHeight = m_Height;
+			boudingBox.Grow(v0);
+			boudingBox.Grow(v1);
+			boudingBox.Grow(v2);
+
+			for (int px{ static_cast<int>(boudingBox.min.x) }; px < boudingBox.max.x; ++px)
+			{
+				for (int py{ static_cast<int>(boudingBox.min.y) }; py < boudingBox.max.y; ++py)
+				{
+					Vector2 pixel{ static_cast<float>(px), static_cast<float>(py) };
+
+					const float area{ Vector2::Cross(v1 - v0, v2 - v0) / 2.f };
+					const float w0{ (Vector2::Cross(v2 - v1, pixel - v1) / 2.f) / area };
+
+					if (w0 < 0)
+					{
+						continue;
+					}
+
+					const float w1{ (Vector2::Cross(v0 - v2, pixel - v2) / 2.f) / area };
+
+					if (w1 < 0)
+					{
+						continue;
+					}
+
+					const float w2{ (Vector2::Cross(v1 - v0, pixel - v0) / 2.f) / area };
+
+					if (w2 < 0)
+					{
+						continue;
+					}
+
+					const int pixelIndex{ py * m_Width + px };
+					const float depthValue{ vertex0.position.z * w0
+										   + vertex1.position.z * w1
+										   + vertex2.position.z * w2 };
+
+					if (depthValue <= m_pDepthBufferPixels[pixelIndex])
+					{
+						m_pDepthBufferPixels[pixelIndex] = depthValue;
+					}
+					else continue;
+
+					Vector2 interpolation{ vertex0.uv * w0 + vertex1.uv * w1 + vertex2.uv * w2 };
+					
+					ColorRGB finalColor{ m_pTexture->Sample(interpolation) };
+
+					//Update Color in Buffer
+					finalColor.MaxToOne();
+
+					m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+						static_cast<uint8_t>(finalColor.r * 255),
+						static_cast<uint8_t>(finalColor.g * 255),
+						static_cast<uint8_t>(finalColor.b * 255));
+				}
+			}
+		}
+	}
+}
+
+void Renderer::W2_Part3() const
+{
+	std::vector<Mesh> meshes_world
+	{
+		Mesh
+		{
+			{
+				Vertex{ { -3.f, 3.f, -2.f }, {}, { 0.f, 0.f } },
+				Vertex{ { 0.f, 3.f, -2.f }, {}, { 0.5f, 0.f } },
+				Vertex{ { 3.f, 3.f, -2.f }, {}, { 1.f, 0.f } },
+				Vertex{ { -3.f, 0.f, -2.f }, {}, { 0.f, 0.5f } },
+				Vertex{ { 0.f, 0.f, -2.f }, {}, { 0.5f, 0.5f } },
+				Vertex{ { 3.f, 0.f, -2.f }, {}, { 1.f, 0.5f } },
+				Vertex{ { -3.f, -3.f, -2.f }, {}, { 0.f, 1.f } },
+				Vertex{ { 0.f, -3.f, -2.f }, {}, { 0.5f, 1.f } },
+				Vertex{ { 3.f, -3.f, -2.f }, {}, { 1.f, 1.f } }
+			},
+
+			{
+				3, 0, 1,	1, 4, 3,	4, 1, 2,
+				2, 5, 4,	6, 3, 4,	4, 7, 6,
+				7, 4, 5,	5, 8, 7
+			},
+
+			PrimitiveTopology::TriangeList
+		}
+	};
+
+	const int amountOfPixels{ m_Width * m_Height };
+	for (int index{}; index < amountOfPixels; ++index)
+	{
+		m_pDepthBufferPixels[index] = INFINITY;
+	}
+
+	const int amountOfMeshes{ static_cast<int>(meshes_world.size()) };
+	for (int meshIndex{}; meshIndex < amountOfMeshes; ++meshIndex)
+	{
+		Mesh mesh{ meshes_world[meshIndex] };
+
+		int amountOfTriangles{};
+
+		if (mesh.primitiveTopology == PrimitiveTopology::TriangeList)
+		{
+			amountOfTriangles = static_cast<int>(meshes_world[meshIndex].indices.size()) / 3;
+		}
+		else if (mesh.primitiveTopology == PrimitiveTopology::TriangleStrip)
+		{
+			amountOfTriangles = static_cast<int>(meshes_world[meshIndex].indices.size()) / 3;
+			amountOfTriangles *= 2;
+		}
+
+		std::vector<Vertex> transformed_vertices_world{};
+		VertexTransformationFunction(mesh.vertices, transformed_vertices_world);
+
+		//the indices to get the index form the mesh.indices vector
+		int vertex0Index{};
+		int vertex1Index{};
+		int vertex2Index{};
+
+		for (int triangleIndex{}; triangleIndex < amountOfTriangles; ++triangleIndex)
+		{
+			if (mesh.primitiveTopology == PrimitiveTopology::TriangeList)
+			{
+				vertex0Index = triangleIndex * 3;
+				vertex1Index = triangleIndex * 3 + 1;
+				vertex2Index = triangleIndex * 3 + 2;
+			}
+			else if (mesh.primitiveTopology == PrimitiveTopology::TriangleStrip)
+			{
+				vertex0Index = triangleIndex;
+				vertex1Index = triangleIndex + 1;
+				vertex2Index = triangleIndex + 2;
+
+				if (    mesh.indices[vertex0Index] == mesh.indices[vertex1Index]
+					 || mesh.indices[vertex1Index] == mesh.indices[vertex2Index]
+					 || mesh.indices[vertex2Index] == mesh.indices[vertex0Index] )
+				{
+					++amountOfTriangles; //no triangle has been rendered so increase amount of triangles otherwise the bottom halve of the mesh won't be rendered
+					continue;
+				}
+			}
+
+			const Vertex& vertex0{ transformed_vertices_world[mesh.indices[vertex0Index]] };
+			const Vertex& vertex1{ transformed_vertices_world[mesh.indices[vertex1Index]] };
+			const Vertex& vertex2{ transformed_vertices_world[mesh.indices[vertex2Index]] };
+
+			const Vector2 v0{ vertex0.position.x, vertex0.position.y };
+			const Vector2 v1{ vertex1.position.x, vertex1.position.y };
+			const Vector2 v2{ vertex2.position.x, vertex2.position.y };
+
+			TriangleBoundingBox boudingBox{};
+			boudingBox.screenWith = m_Width;
+			boudingBox.screenHeight = m_Height;
+			boudingBox.Grow(v0);
+			boudingBox.Grow(v1);
+			boudingBox.Grow(v2);
+
+			for (int px{ static_cast<int>(boudingBox.min.x) }; px < boudingBox.max.x; ++px)
+			{
+				for (int py{ static_cast<int>(boudingBox.min.y) }; py < boudingBox.max.y; ++py)
+				{
+					const Vector2 pixel{ static_cast<float>(px), static_cast<float>(py) };
+
+					const float area{ Vector2::Cross(v1 - v0, v2 - v0) / 2.f };
+					const float w0{ (Vector2::Cross(v2 - v1, pixel - v1) / 2.f) / area };
+
+					if (w0 < 0)
+					{
+						continue;
+					}
+
+					const float w1{ (Vector2::Cross(v0 - v2, pixel - v2) / 2.f) / area };
+
+					if (w1 < 0)
+					{
+						continue;
+					}
+
+					const float w2{ (Vector2::Cross(v1 - v0, pixel - v0) / 2.f) / area };
+
+					if (w2 < 0)
+					{
+						continue;
+					}
+
+					const float zInterpolated
+					{ 
+						1.f / (  (1.f * w0) / vertex0.position.z
+							   + (1.f * w1) / vertex1.position.z
+							   + (1.f * w2) / vertex2.position.z )
+					};
+
+					const int pixelIndex{ py * m_Width + px };
+
+					if (zInterpolated <= m_pDepthBufferPixels[pixelIndex])
+					{
+						m_pDepthBufferPixels[pixelIndex] = zInterpolated;
+					}
+					else continue;
+
+					Vector2 interpolatedUV
+					{ 
+						zInterpolated * (  (vertex0.uv * w0) / vertex0.position.z
+										 + (vertex1.uv * w1) / vertex1.position.z
+										 + (vertex2.uv * w2) / vertex2.position.z )
+					};
+
+					ColorRGB finalColor{ m_pTexture->Sample(interpolatedUV) };
+
+					//Update Color in Buffer
+					finalColor.MaxToOne();
+
+					m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+						static_cast<uint8_t>(finalColor.r * 255),
+						static_cast<uint8_t>(finalColor.g * 255),
+						static_cast<uint8_t>(finalColor.b * 255));
+				}
 			}
 		}
 	}

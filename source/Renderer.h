@@ -47,6 +47,8 @@ namespace dae
 		int m_Width{};
 		int m_Height{};
 
+		Texture* m_pTexture{};
+
 		//Function that transforms the vertices from the mesh from World space to Screen space
 		void VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const; //W1 Version
 		void W1_Part1() const;
@@ -56,5 +58,7 @@ namespace dae
 		void W1_Part5() const;
 
 		void W2_Part1() const;
+		void W2_Part2() const;
+		void W2_Part3() const;
 	};
 }

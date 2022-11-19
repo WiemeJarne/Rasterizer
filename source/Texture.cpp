@@ -17,22 +17,26 @@ namespace dae
 			SDL_FreeSurface(m_pSurface);
 			m_pSurface = nullptr;
 		}
+
+		delete m_pRValue;
+		delete m_pGValue;
+		delete m_pBValue;
 	}
 
 	Texture* Texture::LoadFromFile(const std::string& path)
 	{
-		//TODO
-		//Load SDL_Surface using IMG_LOAD
-		//Create & Return a new Texture Object (using SDL_Surface)
-
-		return nullptr;
+		auto surface{ IMG_Load(path.c_str()) };
+		return new Texture(surface);
 	}
 
-	ColorRGB Texture::Sample(const Vector2& uv) const
+	ColorRGB Texture::Sample(const Vector2& uv)
 	{
-		//TODO
-		//Sample the correct texel for the given uv
+		const Vector2 scaledUV{ uv.x * m_pSurface->w, uv.y * m_pSurface->h };
 
-		return {};
+		Uint32 pixel{ m_pSurfacePixels[static_cast<int>(scaledUV.y) * m_pSurface->h + static_cast<int>(scaledUV.x)] };
+
+		SDL_GetRGB(pixel, m_pSurface->format, m_pRValue, m_pGValue, m_pBValue);
+
+		return { *m_pRValue / 255.f, *m_pGValue / 255.f, *m_pBValue / 255.f };
 	}
 }
