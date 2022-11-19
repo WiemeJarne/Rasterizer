@@ -369,6 +369,7 @@ void Renderer::W1_Part5() const
 		{{3.f, -2.f, 2.f}, {0.f, 1.f, 0.f}},
 		{{-3.f, -2.f, 2.f}, {0.f, 0.f, 1.f}}
 	};
+
 	std::vector<Vertex> transformed_vertices_world{};
 	VertexTransformationFunction(vertices_world, transformed_vertices_world);
 
@@ -381,49 +382,70 @@ void Renderer::W1_Part5() const
 	const int amountOfTriangles{ static_cast<int>(transformed_vertices_world.size()) / 3 };
 	for (int index{}; index < amountOfTriangles; ++index)
 	{
+		const Vertex& vertex0{ transformed_vertices_world[index * 3] };
+		const Vertex& vertex1{ transformed_vertices_world[index * 3 + 1] };
+		const Vertex& vertex2{ transformed_vertices_world[index * 3 + 2] };
+
 		TriangleBoundingBox boudingBox{};
-		boudingBox.Grow({ transformed_vertices_world[index * 3].position.x, transformed_vertices_world[index * 3].position.y });
-		boudingBox.Grow({ transformed_vertices_world[index * 3 + 1].position.x, transformed_vertices_world[index * 3 + 1].position.y });
-		boudingBox.Grow({ transformed_vertices_world[index * 3 + 2].position.x, transformed_vertices_world[index * 3 + 2].position.y });
+		boudingBox.screenWith = m_Width;
+		boudingBox.screenHeight = m_Height;
+		boudingBox.Grow({ vertex0.position.x, vertex0.position.y });
+		boudingBox.Grow({ vertex1.position.x, vertex1.position.y });
+		boudingBox.Grow({ vertex2.position.x, vertex2.position.y });
 
-		for (int px{}; px < m_Width; ++px)
+		Vector2 v0{ vertex0.position.x, vertex0.position.y };
+		Vector2 v1{ vertex1.position.x, vertex1.position.y };
+		Vector2 v2{ vertex2.position.x, vertex2.position.y };
+
+		float area{ Vector2::Cross(v1 - v0, v2 - v0) / 2.f };
+
+		Vector2 v1ToV2{ v2 - v1 };
+		Vector2 v2ToV0{ v0 - v2 };
+		Vector2 v0ToV1{ v1 - v0 };
+
+		Vector2 pixel{};
+		int pixelIndex{};
+		float depthValue{};
+		ColorRGB finalColor{};
+		float w0{};
+		float w1{};
+		float w2{};
+
+		for (int px{ static_cast<int>(boudingBox.min.x) }; px < boudingBox.max.x; ++px)
 		{
-			for (int py{}; py < m_Height; ++py)
+			for (int py{ static_cast<int>(boudingBox.min.y) }; py < boudingBox.max.y; ++py)
 			{
-				Vector2 pixel{ static_cast<float>(px), static_cast<float>(py) };
+				pixel = { static_cast<float>(px), static_cast<float>(py) };
 
-				if (!boudingBox.IsPointInBoundingBox(pixel)) continue;
-
-				Vector2 v0{ transformed_vertices_world[index * 3].position.x, transformed_vertices_world[index * 3].position.y };
-				Vector2 v1{ transformed_vertices_world[index * 3 + 1].position.x, transformed_vertices_world[index * 3 + 1].position.y };
-				Vector2 v2{ transformed_vertices_world[index * 3 + 2].position.x, transformed_vertices_world[index * 3 + 2].position.y };
-
-				float area{ Vector2::Cross(v1 - v0, v2 - v0) / 2.f };
-				float w0{ (Vector2::Cross(v2 - v1, pixel - v1) / 2.f) / area };
+				 w0 = Vector2::Cross(v1ToV2, pixel - v1);
 
 				if (w0 < 0)
 				{
 					continue;
 				}
 
-				float w1{ (Vector2::Cross(v0 - v2, pixel - v2) / 2.f) / area };
+				w1 = Vector2::Cross(v2ToV0, pixel - v2);
 
 				if (w1 < 0)
 				{
 					continue;
 				}
 
-				float w2{ (Vector2::Cross(v1 - v0, pixel - v0) / 2.f) / area };
+				w2 = Vector2::Cross(v0ToV1, pixel - v0);
 
 				if (w2 < 0)
 				{
 					continue;
 				}
 
-				const int pixelIndex{ py * m_Width + px };
-				const float depthValue{ transformed_vertices_world[index * 3].position.z * w0
-									   + transformed_vertices_world[index * 3 + 1].position.z * w1
-									   + transformed_vertices_world[index * 3 + 2].position.z * w2 };
+				w0 = (w0 / 2.f) / area;
+				w1 = (w1 / 2.f) / area;
+				w2 = (w2 / 2.f) / area;
+
+				pixelIndex = { py * m_Width + px };
+				depthValue = { vertex0.position.z * w0
+									   + vertex1.position.z * w1
+									   + vertex2.position.z * w2 };
 
 				if (depthValue <= m_pDepthBufferPixels[pixelIndex])
 				{
@@ -431,10 +453,10 @@ void Renderer::W1_Part5() const
 				}
 				else continue;
 
-				ColorRGB finalColor
-				{ transformed_vertices_world[index * 3].color * w0
-				  + transformed_vertices_world[index * 3 + 1].color * w1
-				  + transformed_vertices_world[index * 3 + 2].color * w2 };
+				finalColor =
+				{ vertex0.color * w0
+				  + vertex1.color * w1
+				  + vertex2.color * w2 };
 
 				//Update Color in Buffer
 				finalColor.MaxToOne();
@@ -817,6 +839,7 @@ void Renderer::W2_Part3() const
 			amountOfTriangles = static_cast<int>(meshes_world[meshIndex].indices.size()) / 3;
 			amountOfTriangles *= 2;
 		}
+		else break;
 
 		std::vector<Vertex> transformed_vertices_world{};
 		VertexTransformationFunction(mesh.vertices, transformed_vertices_world);
@@ -840,9 +863,9 @@ void Renderer::W2_Part3() const
 				vertex1Index = triangleIndex + 1;
 				vertex2Index = triangleIndex + 2;
 
-				if (    mesh.indices[vertex0Index] == mesh.indices[vertex1Index]
-					 || mesh.indices[vertex1Index] == mesh.indices[vertex2Index]
-					 || mesh.indices[vertex2Index] == mesh.indices[vertex0Index] )
+				if (mesh.indices[vertex0Index] == mesh.indices[vertex1Index]
+					|| mesh.indices[vertex1Index] == mesh.indices[vertex2Index]
+					|| mesh.indices[vertex2Index] == mesh.indices[vertex0Index])
 				{
 					++amountOfTriangles; //no triangle has been rendered so increase amount of triangles otherwise the bottom halve of the mesh won't be rendered
 					continue;
@@ -857,6 +880,8 @@ void Renderer::W2_Part3() const
 			const Vector2 v1{ vertex1.position.x, vertex1.position.y };
 			const Vector2 v2{ vertex2.position.x, vertex2.position.y };
 
+			const float area{ Vector2::Cross(v1 - v0, v2 - v0) / 2.f };
+
 			TriangleBoundingBox boudingBox{};
 			boudingBox.screenWith = m_Width;
 			boudingBox.screenHeight = m_Height;
@@ -864,42 +889,59 @@ void Renderer::W2_Part3() const
 			boudingBox.Grow(v1);
 			boudingBox.Grow(v2);
 
+			Vector2 pixel{};
+			float w0{};
+			float w1{};
+			float w2{};
+
+			Vector2 v1ToV2{ v2 - v1 };
+			Vector2 v2ToV0{ v0 - v2 };
+			Vector2 v0ToV1{ v1 - v0 };
+
+			float zInterpolated{};
+			int pixelIndex{};
+			Vector2 interpolatedUV{};
+			ColorRGB finalColor{};
+
 			for (int px{ static_cast<int>(boudingBox.min.x) }; px < boudingBox.max.x; ++px)
 			{
 				for (int py{ static_cast<int>(boudingBox.min.y) }; py < boudingBox.max.y; ++py)
 				{
-					const Vector2 pixel{ static_cast<float>(px), static_cast<float>(py) };
+					pixel = { static_cast<float>(px), static_cast<float>(py) };
 
-					const float area{ Vector2::Cross(v1 - v0, v2 - v0) / 2.f };
-					const float w0{ (Vector2::Cross(v2 - v1, pixel - v1) / 2.f) / area };
+					w0 = Vector2::Cross(v1ToV2, pixel - v1);
 
 					if (w0 < 0)
 					{
 						continue;
 					}
 
-					const float w1{ (Vector2::Cross(v0 - v2, pixel - v2) / 2.f) / area };
+					w1 = Vector2::Cross(v2ToV0, pixel - v2);
 
 					if (w1 < 0)
 					{
 						continue;
 					}
 
-					const float w2{ (Vector2::Cross(v1 - v0, pixel - v0) / 2.f) / area };
+					w2 = Vector2::Cross(v0ToV1, pixel - v0);
 
 					if (w2 < 0)
 					{
 						continue;
 					}
 
-					const float zInterpolated
+					w0 = (w0 / 2.f) / area;
+					w1 = (w1 / 2.f) / area;
+					w2 = (w2 / 2.f) / area;
+
+					zInterpolated =
 					{ 
 						1.f / (  (1.f * w0) / vertex0.position.z
 							   + (1.f * w1) / vertex1.position.z
 							   + (1.f * w2) / vertex2.position.z )
 					};
 
-					const int pixelIndex{ py * m_Width + px };
+					pixelIndex = { py * m_Width + px };
 
 					if (zInterpolated <= m_pDepthBufferPixels[pixelIndex])
 					{
@@ -907,14 +949,14 @@ void Renderer::W2_Part3() const
 					}
 					else continue;
 
-					Vector2 interpolatedUV
+					interpolatedUV =
 					{ 
 						zInterpolated * (  (vertex0.uv * w0) / vertex0.position.z
 										 + (vertex1.uv * w1) / vertex1.position.z
 										 + (vertex2.uv * w2) / vertex2.position.z )
 					};
 
-					ColorRGB finalColor{ m_pTexture->Sample(interpolatedUV) };
+					finalColor = m_pTexture->Sample(interpolatedUV);
 
 					//Update Color in Buffer
 					finalColor.MaxToOne();
