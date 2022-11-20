@@ -53,6 +53,7 @@ void Renderer::Render()
 	Uint8 redValue{ 100 };
 	Uint8 greenValue{ 100 };
 	Uint8 blueValue{ 100 };
+	std::fill_n(m_pDepthBufferPixels, m_Width * m_Height, INFINITY);
 	SDL_FillRect(m_pBackBuffer, NULL, SDL_MapRGB( m_pBackBuffer->format, redValue, greenValue, blueValue));
 	//Lock BackBuffer
 	SDL_LockSurface(m_pBackBuffer);
@@ -285,12 +286,6 @@ void Renderer::W1_Part4() const
 	};
 	std::vector<Vertex> transformed_vertices_world{};
 	VertexTransformationFunction(vertices_world, transformed_vertices_world);
-
-	const int amountOfPixels{ m_Width * m_Height };
-	for (int index{}; index < amountOfPixels; ++index)
-	{
-		m_pDepthBufferPixels[index] = INFINITY;
-	}
 	
 	const int amountOfTriangles{ static_cast<int>(transformed_vertices_world.size()) / 3 };
 	for (int index{}; index < amountOfTriangles; ++index)
@@ -373,12 +368,6 @@ void Renderer::W1_Part5() const
 	std::vector<Vertex> transformed_vertices_world{};
 	VertexTransformationFunction(vertices_world, transformed_vertices_world);
 
-	const int amountOfPixels{ m_Width * m_Height };
-	for (int index{}; index < amountOfPixels; ++index)
-	{
-		m_pDepthBufferPixels[index] = INFINITY;
-	}
-
 	const int amountOfTriangles{ static_cast<int>(transformed_vertices_world.size()) / 3 };
 	for (int index{}; index < amountOfTriangles; ++index)
 	{
@@ -450,21 +439,20 @@ void Renderer::W1_Part5() const
 				if (depthValue <= m_pDepthBufferPixels[pixelIndex])
 				{
 					m_pDepthBufferPixels[pixelIndex] = depthValue;
+
+					finalColor =
+					{ vertex0.color * w0
+					  + vertex1.color * w1
+					  + vertex2.color * w2 };
+
+					//Update Color in Buffer
+					finalColor.MaxToOne();
+
+					m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+						static_cast<uint8_t>(finalColor.r * 255),
+						static_cast<uint8_t>(finalColor.g * 255),
+						static_cast<uint8_t>(finalColor.b * 255));
 				}
-				else continue;
-
-				finalColor =
-				{ vertex0.color * w0
-				  + vertex1.color * w1
-				  + vertex2.color * w2 };
-
-				//Update Color in Buffer
-				finalColor.MaxToOne();
-
-				m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
-					static_cast<uint8_t>(finalColor.r * 255),
-					static_cast<uint8_t>(finalColor.g * 255),
-					static_cast<uint8_t>(finalColor.b * 255));
 			}
 		}
 	}
@@ -509,12 +497,6 @@ void Renderer::W2_Part1() const
 			PrimitiveTopology::TriangleStrip*/
 		}
 	};
-
-	const int amountOfPixels{ m_Width * m_Height };
-	for (int index{}; index < amountOfPixels; ++index)
-	{
-		m_pDepthBufferPixels[index] = INFINITY;
-	}
 
 	const int amountOfMeshes{ static_cast<int>(meshes_world.size()) };
 	for (int meshIndex{}; meshIndex < amountOfMeshes; ++meshIndex)
@@ -664,12 +646,6 @@ void Renderer::W2_Part2() const
 		}
 	};
 
-	const int amountOfPixels{ m_Width * m_Height };
-	for (int index{}; index < amountOfPixels; ++index)
-	{
-		m_pDepthBufferPixels[index] = INFINITY;
-	}
-
 	const int amountOfMeshes{ static_cast<int>(meshes_world.size()) };
 	for (int meshIndex{}; meshIndex < amountOfMeshes; ++meshIndex)
 	{
@@ -816,12 +792,6 @@ void Renderer::W2_Part3() const
 			PrimitiveTopology::TriangeList
 		}
 	};
-
-	const int amountOfPixels{ m_Width * m_Height };
-	for (int index{}; index < amountOfPixels; ++index)
-	{
-		m_pDepthBufferPixels[index] = INFINITY;
-	}
 
 	const int amountOfMeshes{ static_cast<int>(meshes_world.size()) };
 	for (int meshIndex{}; meshIndex < amountOfMeshes; ++meshIndex)
