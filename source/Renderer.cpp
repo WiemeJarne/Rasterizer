@@ -511,8 +511,8 @@ void Renderer::W2_Part1() const
 		}
 		else if(mesh.primitiveTopology == PrimitiveTopology::TriangleStrip)
 		{
-			amountOfTriangles = static_cast<int>(meshes_world[meshIndex].indices.size()) / 3;
-			amountOfTriangles *= 2;
+			amountOfTriangles = static_cast<int>(meshes_world[meshIndex].indices.size()) - 2;
+
 		}
 
 		std::vector<Vertex> transformed_vertices_world{};
@@ -541,7 +541,6 @@ void Renderer::W2_Part1() const
 					|| mesh.indices[vertex1Index] == mesh.indices[vertex2Index]
 					|| mesh.indices[vertex2Index] == mesh.indices[vertex0Index])
 				{
-					++amountOfTriangles; //no triangle has been rendered so increase amount of triangles otherwise the bottom halve of the mesh won't be rendered
 					continue;
 				}
 			}
@@ -636,13 +635,21 @@ void Renderer::W2_Part2() const
 				Vertex{ { 3.f, -3.f, -2.f }, {}, { 1.f, 1.f } }
 			},
 
-			{
+			/*{
 				3, 0, 1,	1, 4, 3,	4, 1, 2,
 				2, 5, 4,	6, 3, 4,	4, 7, 6,
 				7, 4, 5,	5, 8, 7
 			},
 
-			PrimitiveTopology::TriangeList
+			PrimitiveTopology::TriangeList*/
+
+			{
+				3, 0, 4, 1, 5, 2,
+				2, 6,
+				6, 3, 7, 4, 8, 5
+			},
+
+			PrimitiveTopology::TriangleStrip
 		}
 	};
 
@@ -659,8 +666,7 @@ void Renderer::W2_Part2() const
 		}
 		else if (mesh.primitiveTopology == PrimitiveTopology::TriangleStrip)
 		{
-			amountOfTriangles = static_cast<int>(meshes_world[meshIndex].indices.size()) / 3;
-			amountOfTriangles *= 2;
+			amountOfTriangles = static_cast<int>(meshes_world[meshIndex].indices.size()) - 2;
 		}
 
 		std::vector<Vertex> transformed_vertices_world{};
@@ -783,13 +789,21 @@ void Renderer::W2_Part3() const
 				Vertex{ { 3.f, -3.f, -2.f }, {}, { 1.f, 1.f } }
 			},
 
+			//{
+			//	3, 0, 1,	1, 4, 3,	4, 1, 2,
+			//	2, 5, 4,	6, 3, 4,	4, 7, 6,
+			//	7, 4, 5,	5, 8, 7
+			//},
+
+			//PrimitiveTopology::TriangeList
+
 			{
-				3, 0, 1,	1, 4, 3,	4, 1, 2,
-				2, 5, 4,	6, 3, 4,	4, 7, 6,
-				7, 4, 5,	5, 8, 7
+				3, 0, 4, 1, 5, 2,
+				2, 6,
+				6, 3, 7, 4, 8, 5
 			},
 
-			PrimitiveTopology::TriangeList
+			PrimitiveTopology::TriangleStrip
 		}
 	};
 
@@ -806,8 +820,7 @@ void Renderer::W2_Part3() const
 		}
 		else if (mesh.primitiveTopology == PrimitiveTopology::TriangleStrip)
 		{
-			amountOfTriangles = static_cast<int>(meshes_world[meshIndex].indices.size()) / 3;
-			amountOfTriangles *= 2;
+			amountOfTriangles = static_cast<int>(meshes_world[meshIndex].indices.size()) - 2;
 		}
 		else break;
 
@@ -837,7 +850,6 @@ void Renderer::W2_Part3() const
 					|| mesh.indices[vertex1Index] == mesh.indices[vertex2Index]
 					|| mesh.indices[vertex2Index] == mesh.indices[vertex0Index])
 				{
-					++amountOfTriangles; //no triangle has been rendered so increase amount of triangles otherwise the bottom halve of the mesh won't be rendered
 					continue;
 				}
 			}
