@@ -33,6 +33,8 @@ namespace dae
 
 		bool SaveBufferToImage() const;
 
+		void ChangeRenderMode();
+
 	private:
 		SDL_Window* m_pWindow{};
 
@@ -49,8 +51,19 @@ namespace dae
 
 		Texture* m_pTexture{};
 
+		std::vector<Mesh> m_MeshesWorld{};
+
+		enum class RenderMode
+		{
+			color,
+			depth
+		};
+
+		RenderMode m_RenderMode{ RenderMode::color };
+
 		//Function that transforms the vertices from the mesh from World space to Screen space
-		void VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const; //W1 Version
+		void VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const;
+		void VertexTransformationFunction(std::vector<Mesh>& meshes_world);
 		void W1_Part1() const;
 		void W1_Part2() const;
 		void W1_Part3() const;
@@ -60,5 +73,8 @@ namespace dae
 		void W2_Part1() const;
 		void W2_Part2() const;
 		void W2_Part3() const;
+
+		void W3_Part1();
+		void W3_Part2();
 	};
 }

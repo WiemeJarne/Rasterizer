@@ -31,10 +31,16 @@ Renderer::Renderer(SDL_Window* pWindow) :
 		m_pDepthBufferPixels[index] = INFINITY;
 	}
 
-	m_pTexture = Texture::LoadFromFile("Resources/uv_grid_2.png");
+	m_pTexture = Texture::LoadFromFile("Resources/tuktuk.png");
+
+	m_MeshesWorld = { Mesh{} };
+	m_MeshesWorld[0].primitiveTopology = PrimitiveTopology::TriangeList;
+
+	Utils::ParseOBJ("Resources/tuktuk.obj", m_MeshesWorld[0].vertices, m_MeshesWorld[0].indices);
 
 	//Initialize Camera
-	m_Camera.Initialize(60.f, { .0f,.0f,-10.f });
+	//m_Camera.Initialize(60.f, { .0f,.0f,-10.f }, static_cast<float>(m_Width) / m_Height);
+	m_Camera.Initialize(60.f, { 0.f, 5.f, -30.f }, static_cast<float>(m_Width) / m_Height);
 }
 
 Renderer::~Renderer()
@@ -46,6 +52,8 @@ Renderer::~Renderer()
 void Renderer::Update(Timer* pTimer)
 {
 	m_Camera.Update(pTimer);
+
+	m_MeshesWorld[0].worldMatrix = Matrix::CreateRotationY(pTimer->GetTotal());
 }
 
 void Renderer::Render()
@@ -68,7 +76,9 @@ void Renderer::Render()
 
 	//W2_Part1();
 	//W2_Part2();
-	W2_Part3();
+	//W2_Part3();
+	//W3_Part1();
+	W3_Part2();
 
 	//@END
 	//Update SDL Surface
@@ -105,6 +115,36 @@ void Renderer::VertexTransformationFunction(const std::vector<Vertex>& vertices_
 
 		//add the vertex to vertices_out
 		vertices_out.emplace_back(projectedVertex);
+	}
+}
+
+void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes_world)
+{
+	for (Mesh& mesh : meshes_world)
+	{
+		mesh.vertices_out.resize(mesh.vertices.size());
+
+		Matrix worldViewProjectionMatirx{ mesh.worldMatrix * m_Camera.viewMatrix * m_Camera.projectionMatrix };
+
+		const int amountOfVertices{ static_cast<int>(mesh.vertices.size()) };
+		for (int index{}; index < amountOfVertices; ++index)
+		{
+			//transform vertex from world space to view space
+			Vector4 pos{ mesh.vertices[index].position.x, mesh.vertices[index].position.y, mesh.vertices[index].position.z, 0};
+			mesh.vertices_out[index].position = worldViewProjectionMatirx.TransformPoint(pos);
+
+			//perspective divide
+			const float wInversed{ 1 / mesh.vertices_out[index].position.w };
+			mesh.vertices_out[index].position.x *= wInversed;
+			mesh.vertices_out[index].position.y *= wInversed;
+			mesh.vertices_out[index].position.z *= wInversed;
+			mesh.vertices_out[index].position.w = wInversed;
+
+			//set color of the vertex
+			mesh.vertices_out[index].color = mesh.vertices[index].color;
+			//set uv of the vertex
+			mesh.vertices_out[index].uv = mesh.vertices[index].uv;
+		}
 	}
 }
 
@@ -976,7 +1016,421 @@ void Renderer::W2_Part3() const
 	}
 }
 
+void Renderer::W3_Part1()
+{
+	std::vector<Mesh> meshes_world
+	{
+		Mesh
+		{
+			{
+				Vertex{ { -3.f, 3.f, -2.f }, {}, { 0.f, 0.f } },
+				Vertex{ { 0.f, 3.f, -2.f }, {}, { 0.5f, 0.f } },
+				Vertex{ { 3.f, 3.f, -2.f }, {}, { 1.f, 0.f } },
+				Vertex{ { -3.f, 0.f, -2.f }, {}, { 0.f, 0.5f } },
+				Vertex{ { 0.f, 0.f, -2.f }, {}, { 0.5f, 0.5f } },
+				Vertex{ { 3.f, 0.f, -2.f }, {}, { 1.f, 0.5f } },
+				Vertex{ { -3.f, -3.f, -2.f }, {}, { 0.f, 1.f } },
+				Vertex{ { 0.f, -3.f, -2.f }, {}, { 0.5f, 1.f } },
+				Vertex{ { 3.f, -3.f, -2.f }, {}, { 1.f, 1.f } }
+			},
+
+			/*{
+				3, 0, 1,	1, 4, 3,	4, 1, 2,
+				2, 5, 4,	6, 3, 4,	4, 7, 6,
+				7, 4, 5,	5, 8, 7
+			},
+
+			PrimitiveTopology::TriangeList*/
+
+			{
+				3, 0, 4, 1, 5, 2,
+				2, 6,
+				6, 3, 7, 4, 8, 5
+			},
+
+			PrimitiveTopology::TriangleStrip
+		}
+	};
+
+	VertexTransformationFunction(meshes_world);
+
+	const int amountOfMeshes{ static_cast<int>(meshes_world.size()) };
+	for (Mesh& mesh : meshes_world)
+	{
+		for (Vertex_Out& vertex : mesh.vertices_out)
+		{
+			vertex.position.x = 0.5f * (vertex.position.x + 1.f) * m_Width;
+			vertex.position.y = 0.5f * (1.f - vertex.position.y) * m_Height;
+		}
+
+		int maxCount{};
+		int increment{};
+
+		if (mesh.primitiveTopology == PrimitiveTopology::TriangeList)
+		{
+			increment = 3;
+			maxCount = static_cast<int>(mesh.indices.size());
+		}
+		else
+		{
+			increment = 1;
+			maxCount = static_cast<int>(mesh.indices.size()) - 2;
+		}
+
+		for (int index{}; index < maxCount; index += increment)
+		{
+			if (mesh.indices[index] == mesh.indices[index + 1]
+				|| mesh.indices[index + 1] == mesh.indices[index + 2]
+				|| mesh.indices[index + 2] == mesh.indices[index])
+			{
+				continue;
+			}
+
+			Vertex_Out& vertex0{ mesh.vertices_out[mesh.indices[index]] };
+			Vertex_Out& vertex1{ mesh.vertices_out[mesh.indices[index + 1]] };
+			Vertex_Out& vertex2{ mesh.vertices_out[mesh.indices[index + 2]] };
+
+			if (vertex0.position.z < 0.f || vertex0.position.z > 1.f
+				|| vertex1.position.z < 0.f || vertex1.position.z > 1.f
+				|| vertex2.position.z < 0.f || vertex2.position.z > 1.f) continue;
+
+			const Vector2 v0{ vertex0.position.x, vertex0.position.y };
+			const Vector2 v1{ vertex1.position.x, vertex1.position.y };
+			const Vector2 v2{ vertex2.position.x, vertex2.position.y };
+
+			float w0{};
+			float w1{};
+			float w2{};
+
+			Vector2 v1ToV2{ v2 - v1 };
+			Vector2 v2ToV0{ v0 - v2 };
+			Vector2 v0ToV1{ v1 - v0 };
+
+			const float area{ Vector2::Cross(v0ToV1, v2 - v0) / 2.f };
+
+			Vector2 min = { std::min(v0.x, v1.x), std::min(v0.y, v1.y) };
+			min.x = std::min(min.x, v2.x);
+			min.x = std::max(min.x, 0.f);
+			min.y = std::min(min.y, v2.y);
+			min.y = std::max(min.y, 0.f);
+
+			Vector2 max = { std::max(v0.x, v1.x), std::max(v0.y, v1.y) };
+			max.x = std::max(max.x, v2.x);
+			max.x = std::min(max.x, static_cast<float>(m_Width));
+			max.y = std::max(max.y, v2.y);
+			max.y = std::min(max.y, static_cast<float>(m_Height));
+
+			for (int px{ static_cast<int>(min.x) }; px < max.x; ++px)
+			{
+				for (int py{ static_cast<int>(min.y) }; py < max.y; ++py)
+				{
+					Vector2 pixel = { static_cast<float>(px), static_cast<float>(py) };
+
+					if (mesh.primitiveTopology == PrimitiveTopology::TriangleStrip && index & 0x01)
+					{
+						w0 = Vector2::Cross(v1ToV2, pixel - v1);
+
+						if (w0 > 0)
+						{
+							continue;
+						}
+
+						w1 = Vector2::Cross(v2ToV0, pixel - v2);
+
+						if (w1 > 0)
+						{
+							continue;
+						}
+
+						w2 = Vector2::Cross(v0ToV1, pixel - v0);
+
+						if (w2 > 0)
+						{
+							continue;
+						}
+
+						w0 = (w0 / 2.f) / (-1 * area);
+						w1 = (w1 / 2.f) / (-1 * area);
+						w2 = (w2 / 2.f) / (-1 * area);
+					}
+					else
+					{
+						w0 = Vector2::Cross(v1ToV2, pixel - v1);
+
+						if (w0 < 0)
+						{
+							continue;
+						}
+
+						w1 = Vector2::Cross(v2ToV0, pixel - v2);
+
+						if (w1 < 0)
+						{
+							continue;
+						}
+
+						w2 = Vector2::Cross(v0ToV1, pixel - v0);
+
+						if (w2 < 0)
+						{
+							continue;
+						}
+
+						w0 = (w0 / 2.f) / area;
+						w1 = (w1 / 2.f) / area;
+						w2 = (w2 / 2.f) / area;
+					}
+
+					float depthInterpolated
+					{
+						1.f / ((1.f * w0) / vertex0.position.z
+							   + (1.f * w1) / vertex1.position.z
+							   + (1.f * w2) / vertex2.position.z)
+					};
+
+					int pixelIndex{ py * m_Width + px };
+
+					if (depthInterpolated <= m_pDepthBufferPixels[pixelIndex])
+					{
+						m_pDepthBufferPixels[pixelIndex] = depthInterpolated;
+					}
+					else continue;
+
+					const float wInterpolated
+					{
+						1.f / ((1.f * w0) * vertex0.position.w
+							   + (1.f * w1) * vertex1.position.w
+							   + (1.f * w2) * vertex2.position.w)
+					};
+
+					Vector2 interpolatedUV
+					{
+						wInterpolated * ((vertex0.uv * w0) * vertex0.position.w
+										 + (vertex1.uv * w1) * vertex1.position.w
+										 + (vertex2.uv * w2) * vertex2.position.w)
+					};
+
+					ColorRGB finalColor = m_pTexture->Sample(interpolatedUV);
+
+					//Update Color in Buffer
+					finalColor.MaxToOne();
+
+					m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+						static_cast<uint8_t>(finalColor.r * 255),
+						static_cast<uint8_t>(finalColor.g * 255),
+						static_cast<uint8_t>(finalColor.b * 255));
+				}
+			}
+		}
+	}
+}
+
+void Renderer::W3_Part2()
+{
+	VertexTransformationFunction(m_MeshesWorld);
+
+	const int amountOfMeshes{ static_cast<int>(m_MeshesWorld.size()) };
+	for (Mesh& mesh : m_MeshesWorld)
+	{
+		for (Vertex_Out& vertex : mesh.vertices_out)
+		{
+			vertex.position.x = 0.5f * (vertex.position.x + 1.f) * m_Width;
+			vertex.position.y = 0.5f * (1.f - vertex.position.y) * m_Height;
+		}
+
+		int maxCount{};
+		int increment{};
+
+		if (mesh.primitiveTopology == PrimitiveTopology::TriangeList)
+		{
+			increment = 3;
+			maxCount = static_cast<int>(mesh.indices.size());
+		}
+		else
+		{
+			increment = 1;
+			maxCount = static_cast<int>(mesh.indices.size()) - 2;
+		}
+
+		for (int index{}; index < maxCount; index += increment)
+		{
+			if (mesh.indices[index] == mesh.indices[index + 1]
+				|| mesh.indices[index + 1] == mesh.indices[index + 2]
+				|| mesh.indices[index + 2] == mesh.indices[index])
+			{
+				continue;
+			}
+
+			Vertex_Out& vertex0{ mesh.vertices_out[mesh.indices[index]] };
+			Vertex_Out& vertex1{ mesh.vertices_out[mesh.indices[index + 1]] };
+			Vertex_Out& vertex2{ mesh.vertices_out[mesh.indices[index + 2]] };
+
+			if (vertex0.position.z < 0.f || vertex0.position.z > 1.f
+				|| vertex1.position.z < 0.f || vertex1.position.z > 1.f
+				|| vertex2.position.z < 0.f || vertex2.position.z > 1.f) continue;
+
+			const Vector2 v0{ vertex0.position.x, vertex0.position.y };
+			const Vector2 v1{ vertex1.position.x, vertex1.position.y };
+			const Vector2 v2{ vertex2.position.x, vertex2.position.y };
+
+			float w0{};
+			float w1{};
+			float w2{};
+
+			Vector2 v1ToV2{ v2 - v1 };
+			Vector2 v2ToV0{ v0 - v2 };
+			Vector2 v0ToV1{ v1 - v0 };
+
+			const float area{ Vector2::Cross(v0ToV1, v2 - v0) / 2.f };
+
+			Vector2 min = { std::min(v0.x, v1.x), std::min(v0.y, v1.y) };
+			min.x = std::min(min.x, v2.x);
+			min.x = std::max(min.x, 0.f);
+			min.y = std::min(min.y, v2.y);
+			min.y = std::max(min.y, 0.f);
+
+			Vector2 max = { std::max(v0.x, v1.x), std::max(v0.y, v1.y) };
+			max.x = std::max(max.x, v2.x);
+			max.x = std::min(max.x, static_cast<float>(m_Width));
+			max.y = std::max(max.y, v2.y);
+			max.y = std::min(max.y, static_cast<float>(m_Height));
+
+			for (int px{ static_cast<int>(min.x) }; px < max.x; ++px)
+			{
+				for (int py{ static_cast<int>(min.y) }; py < max.y; ++py)
+				{
+					Vector2 pixel = { static_cast<float>(px), static_cast<float>(py) };
+
+					if (mesh.primitiveTopology == PrimitiveTopology::TriangleStrip && index & 0x01)
+					{
+						w0 = Vector2::Cross(v1ToV2, pixel - v1);
+
+						if (w0 > 0)
+						{
+							continue;
+						}
+
+						w1 = Vector2::Cross(v2ToV0, pixel - v2);
+
+						if (w1 > 0)
+						{
+							continue;
+						}
+
+						w2 = Vector2::Cross(v0ToV1, pixel - v0);
+
+						if (w2 > 0)
+						{
+							continue;
+						}
+
+						w0 = (w0 / 2.f) / (-1 * area);
+						w1 = (w1 / 2.f) / (-1 * area);
+						w2 = (w2 / 2.f) / (-1 * area);
+					}
+					else
+					{
+						w0 = Vector2::Cross(v1ToV2, pixel - v1);
+
+						if (w0 < 0)
+						{
+							continue;
+						}
+
+						w1 = Vector2::Cross(v2ToV0, pixel - v2);
+
+						if (w1 < 0)
+						{
+							continue;
+						}
+
+						w2 = Vector2::Cross(v0ToV1, pixel - v0);
+
+						if (w2 < 0)
+						{
+							continue;
+						}
+
+						w0 = (w0 / 2.f) / area;
+						w1 = (w1 / 2.f) / area;
+						w2 = (w2 / 2.f) / area;
+					}
+
+					float depthInterpolated
+					{
+						1.f / ((1.f * w0) / vertex0.position.z
+							   + (1.f * w1) / vertex1.position.z
+							   + (1.f * w2) / vertex2.position.z)
+					};
+
+					int pixelIndex{ py * m_Width + px };
+
+					if (depthInterpolated <= m_pDepthBufferPixels[pixelIndex])
+					{
+						m_pDepthBufferPixels[pixelIndex] = depthInterpolated;
+					}
+					else continue;
+
+					ColorRGB finalColor{};
+					Vector2 interpolatedUV{};
+					float wInterpolated{};
+
+					switch (m_RenderMode)
+					{
+					case dae::Renderer::RenderMode::color:
+						wInterpolated =
+						{
+							1.f / ((1.f * w0) * vertex0.position.w
+								   + (1.f * w1) * vertex1.position.w
+								   + (1.f * w2) * vertex2.position.w)
+						};
+
+						interpolatedUV =
+						{
+							wInterpolated * ((vertex0.uv * w0) * vertex0.position.w
+											 + (vertex1.uv * w1) * vertex1.position.w
+											 + (vertex2.uv * w2) * vertex2.position.w)
+						};
+
+						finalColor = m_pTexture->Sample(interpolatedUV);
+						break;
+
+					case dae::Renderer::RenderMode::depth:
+						const float remappedDepth{ Remap(depthInterpolated, 0.995f) };
+						finalColor = { remappedDepth, remappedDepth, remappedDepth };
+						break;
+					}
+
+					
+
+					//Update Color in Buffer
+					finalColor.MaxToOne();
+
+					m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+						static_cast<uint8_t>(finalColor.r * 255),
+						static_cast<uint8_t>(finalColor.g * 255),
+						static_cast<uint8_t>(finalColor.b * 255));
+				}
+			}
+		}
+	}
+}
+
 bool Renderer::SaveBufferToImage() const
 {
 	return SDL_SaveBMP(m_pBackBuffer, "Rasterizer_ColorBuffer.bmp");
+}
+
+void Renderer::ChangeRenderMode()
+{
+	switch (m_RenderMode)
+	{
+	case dae::Renderer::RenderMode::color:
+		m_RenderMode = RenderMode::depth;
+		break;
+
+	case dae::Renderer::RenderMode::depth:
+		m_RenderMode = RenderMode::color;
+		break;
+	}
 }
