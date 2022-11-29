@@ -1571,9 +1571,10 @@ void Renderer::W4_Part1()
 
 						pixel.position =
 						{
-							vertex0.position * w0
-							+ vertex1.position * w1
-							+ vertex2.position * w2
+							pixelPos.x,
+							pixelPos.y,
+							interpolatedCameraSpaceZ,
+							0
 						};
 
 						pixel.color =
@@ -1647,13 +1648,11 @@ ColorRGB Renderer::PixelShading(const Vertex_Out& vertex) const
 
 	Vector3 pos{ vertex.position.x, vertex.position.y, vertex.position.w  };
 
-	const float observedArea{ Vector3::Dot(vertex.normal, Vector3{lightDirection - pos}.Normalized()) };
+	const float observedArea{ Vector3::Dot(vertex.normal, Vector3{pos - lightDirection}.Normalized()) };
 
 	if (observedArea < 0.f) return ColorRGB{};
 
 	color += ColorRGB{ 1.f, 1.f, 1.f } * observedArea;
-
-	//color *= ambient;
 
 	return color;
 }
