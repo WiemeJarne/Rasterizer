@@ -123,28 +123,29 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes_world)
 {
 	for (Mesh& mesh : meshes_world)
 	{
-		mesh.vertices_out.resize(mesh.vertices.size());
-
+		mesh.vertices_out.clear();
 		Matrix worldViewProjectionMatirx{ mesh.worldMatrix * m_Camera.viewMatrix * m_Camera.projectionMatrix };
 
-		const int amountOfVertices{ static_cast<int>(mesh.vertices.size()) };
-		for (int index{}; index < amountOfVertices; ++index)
+		for (const Vertex& vertex : mesh.vertices)
 		{
-			//transform vertex from world space to view space
-			Vector4 pos{ mesh.vertices[index].position.x, mesh.vertices[index].position.y, mesh.vertices[index].position.z, 0};
-			mesh.vertices_out[index].position = worldViewProjectionMatirx.TransformPoint(pos);
+			Vertex_Out vertexOut{};
+
+			vertexOut.position = worldViewProjectionMatirx.TransformPoint({ vertex.position.x, vertex.position.y, vertex.position.z, 0 });
+			vertexOut.normal = mesh.worldMatrix.TransformPoint(vertex.normal);
 
 			//perspective divide
-			const float wInversed{ 1 / mesh.vertices_out[index].position.w };
-			mesh.vertices_out[index].position.x *= wInversed;
-			mesh.vertices_out[index].position.y *= wInversed;
-			mesh.vertices_out[index].position.z *= wInversed;
-			mesh.vertices_out[index].position.w = wInversed;
+			const float wInversed{ 1.f / vertexOut.position.w };
+			vertexOut.position.x *= wInversed;
+			vertexOut.position.y *= wInversed;
+			vertexOut.position.z *= wInversed;
+			vertexOut.position.w = wInversed;
 
 			//set color of the vertex
-			mesh.vertices_out[index].color = mesh.vertices[index].color;
+			vertexOut.color = vertex.color;
 			//set uv of the vertex
-			mesh.vertices_out[index].uv = mesh.vertices[index].uv;
+			vertexOut.uv = vertex.uv;
+
+			mesh.vertices_out.emplace_back(vertexOut);
 		}
 	}
 }
@@ -1376,8 +1377,6 @@ void Renderer::W3_Part2()
 						finalColor = { remappedDepth, remappedDepth, remappedDepth };
 						break;
 					}
-
-					
 
 					//Update Color in Buffer
 					finalColor.MaxToOne();
