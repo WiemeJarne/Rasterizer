@@ -77,6 +77,7 @@ void Renderer::Render()
 	//W2_Part1();
 	//W2_Part2();
 	//W2_Part3();
+	
 	//W3_Part1();
 	W3_Part2();
 
@@ -795,8 +796,8 @@ void Renderer::W2_Part2() const
 
 					const int pixelIndex{ py * m_Width + px };
 					const float depthValue{ vertex0.position.z * w0
-										   + vertex1.position.z * w1
-										   + vertex2.position.z * w2 };
+											+ vertex1.position.z * w1
+											+ vertex2.position.z * w2 };
 
 					if (depthValue <= m_pDepthBufferPixels[pixelIndex])
 					{
@@ -883,14 +884,14 @@ void Renderer::W2_Part3() const
 		{
 			if (   mesh.indices[index] == mesh.indices[index + 1]
 				|| mesh.indices[index + 1] == mesh.indices[index + 2]
-				|| mesh.indices[index + 2] == mesh.indices[index])
+				|| mesh.indices[index + 2] == mesh.indices[index]     )
 			{
 				continue;
 			}
 
-			Vertex& vertex0{ transformed_vertices_world[mesh.indices[index]] };
-			Vertex& vertex1{ transformed_vertices_world[mesh.indices[index + 1]] };
-			Vertex& vertex2{ transformed_vertices_world[mesh.indices[index + 2]] };
+			Vertex vertex0{ transformed_vertices_world[mesh.indices[index]] };
+			Vertex vertex1{ transformed_vertices_world[mesh.indices[index + 1]] };
+			Vertex vertex2{ transformed_vertices_world[mesh.indices[index + 2]] };
 
 			const Vector2 v0{ vertex0.position.x, vertex0.position.y };
 			const Vector2 v1{ vertex1.position.x, vertex1.position.y };
@@ -926,58 +927,33 @@ void Renderer::W2_Part3() const
 
 					if (mesh.primitiveTopology == PrimitiveTopology::TriangleStrip && index & 0x01)
 					{
-						w0 = Vector2::Cross(v1ToV2, pixel - v1);
-
-						if (w0 > 0)
-						{
-							continue;
-						}
-
-						w1 = Vector2::Cross(v2ToV0, pixel - v2);
-
-						if (w1 > 0)
-						{
-							continue;
-						}
-
-						w2 = Vector2::Cross(v0ToV1, pixel - v0);
-
-						if (w2 > 0)
-						{
-							continue;
-						}
-
-						w0 = (w0 / 2.f) / (-1 * area);
-						w1 = (w1 / 2.f) / (-1 * area);
-						w2 = (w2 / 2.f) / (-1 * area);
+						std::swap(vertex1, vertex2);
 					}
-					else
+					
+					w0 = Vector2::Cross(v1ToV2, pixel - v1);
+
+					if (w0 < 0)
 					{
-						w0 = Vector2::Cross(v1ToV2, pixel - v1);
-
-						if (w0 < 0)
-						{
-							continue;
-						}
-
-						w1 = Vector2::Cross(v2ToV0, pixel - v2);
-
-						if (w1 < 0)
-						{
-							continue;
-						}
-
-						w2 = Vector2::Cross(v0ToV1, pixel - v0);
-
-						if (w2 < 0)
-						{
-							continue;
-						}
-
-						w0 = (w0 / 2.f) / area;
-						w1 = (w1 / 2.f) / area;
-						w2 = (w2 / 2.f) / area;
+						continue;
 					}
+
+					w1 = Vector2::Cross(v2ToV0, pixel - v2);
+
+					if (w1 < 0)
+					{
+						continue;
+					}
+
+					w2 = Vector2::Cross(v0ToV1, pixel - v0);
+
+					if (w2 < 0)
+					{
+						continue;
+					}
+
+					w0 = (w0 / 2.f) / area;
+					w1 = (w1 / 2.f) / area;
+					w2 = (w2 / 2.f) / area;
 
 					float zInterpolated
 					{ 
