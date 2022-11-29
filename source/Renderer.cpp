@@ -31,16 +31,25 @@ Renderer::Renderer(SDL_Window* pWindow) :
 		m_pDepthBufferPixels[index] = INFINITY;
 	}
 
-	m_pTexture = Texture::LoadFromFile("Resources/tuktuk.png");
+	m_pTexture = Texture::LoadFromFile("Resources/vehicle_diffuse.png");
 
 	m_MeshesWorld = { Mesh{} };
 	m_MeshesWorld[0].primitiveTopology = PrimitiveTopology::TriangeList;
 
-	Utils::ParseOBJ("Resources/tuktuk.obj", m_MeshesWorld[0].vertices, m_MeshesWorld[0].indices);
+	Utils::ParseOBJ("Resources/vehicle.obj", m_MeshesWorld[0].vertices, m_MeshesWorld[0].indices);
+
+	m_MeshesWorld[0].worldMatrix =
+	{
+		{1, 0, 0, 0},
+		{0, 1, 0, 0},
+		{0, 0, 1, 0},
+		{0, 0, 50, 1}
+	};
 
 	//Initialize Camera
 	//m_Camera.Initialize(60.f, { .0f,.0f,-10.f }, static_cast<float>(m_Width) / m_Height);
-	m_Camera.Initialize(60.f, { 0.f, 5.f, -30.f }, static_cast<float>(m_Width) / m_Height);
+	//m_Camera.Initialize(60.f, { 0.f, 5.f, -30.f }, static_cast<float>(m_Width) / m_Height);
+	m_Camera.Initialize(45.f, { 0.f, 0.f, 0.f }, static_cast<float>(m_Width) / m_Height);
 }
 
 Renderer::~Renderer()
@@ -53,7 +62,7 @@ void Renderer::Update(Timer* pTimer)
 {
 	m_Camera.Update(pTimer);
 
-	m_MeshesWorld[0].worldMatrix = Matrix::CreateRotationY(pTimer->GetTotal());
+	m_MeshesWorld[0].worldMatrix = Matrix::CreateRotationY( pTimer->GetTotal()) * Matrix::CreateTranslation(0.f, 0.f, 50.f);
 }
 
 void Renderer::Render()
@@ -79,7 +88,9 @@ void Renderer::Render()
 	//W2_Part3();
 	
 	//W3_Part1();
-	W3_Part2();
+	//W3_Part2();
+
+	W4_Part1();
 
 	//@END
 	//Update SDL Surface
@@ -131,7 +142,7 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes_world)
 			Vertex_Out vertexOut{};
 
 			vertexOut.position = worldViewProjectionMatirx.TransformPoint({ vertex.position.x, vertex.position.y, vertex.position.z, 0 });
-			vertexOut.normal = mesh.worldMatrix.TransformPoint(vertex.normal);
+			vertexOut.normal = mesh.worldMatrix.TransformVector(vertex.normal);
 
 			//perspective divide
 			const float wInversed{ 1.f / vertexOut.position.w };
@@ -144,6 +155,12 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes_world)
 			vertexOut.color = vertex.color;
 			//set uv of the vertex
 			vertexOut.uv = vertex.uv;
+			//set the normal of the vertex
+			vertexOut.normal = vertex.normal;
+			//set the tangent of the vertex
+			vertexOut.tangent = vertex.tangent;
+			//set the viewDirection of the verex
+			vertexOut.viewDirection = vertex.viewDirection;
 
 			mesh.vertices_out.emplace_back(vertexOut);
 		}
@@ -1348,14 +1365,14 @@ void Renderer::W3_Part2()
 					}
 					else continue;
 
+					float interpolatedCameraSpaceZ{};
 					ColorRGB finalColor{};
 					Vector2 interpolatedUV{};
-					float wInterpolated{};
 
 					switch (m_RenderMode)
 					{
 					case dae::Renderer::RenderMode::color:
-						wInterpolated =
+						interpolatedCameraSpaceZ =
 						{
 							1.f / ((1.f * w0) * vertex0.position.w
 								   + (1.f * w1) * vertex1.position.w
@@ -1364,7 +1381,7 @@ void Renderer::W3_Part2()
 
 						interpolatedUV =
 						{
-							wInterpolated * ((vertex0.uv * w0) * vertex0.position.w
+							interpolatedCameraSpaceZ * ((vertex0.uv * w0) * vertex0.position.w
 											 + (vertex1.uv * w1) * vertex1.position.w
 											 + (vertex2.uv * w2) * vertex2.position.w)
 						};
@@ -1389,6 +1406,256 @@ void Renderer::W3_Part2()
 			}
 		}
 	}
+}
+
+void Renderer::W4_Part1()
+{
+	VertexTransformationFunction(m_MeshesWorld);
+
+	const int amountOfMeshes{ static_cast<int>(m_MeshesWorld.size()) };
+	for (Mesh& mesh : m_MeshesWorld)
+	{
+		for (Vertex_Out& vertex : mesh.vertices_out)
+		{
+			vertex.position.x = 0.5f * (vertex.position.x + 1.f) * m_Width;
+			vertex.position.y = 0.5f * (1.f - vertex.position.y) * m_Height;
+		}
+
+		int maxCount{};
+		int increment{};
+
+		if (mesh.primitiveTopology == PrimitiveTopology::TriangeList)
+		{
+			increment = 3;
+			maxCount = static_cast<int>(mesh.indices.size());
+		}
+		else
+		{
+			increment = 1;
+			maxCount = static_cast<int>(mesh.indices.size()) - 2;
+		}
+
+		for (int index{}; index < maxCount; index += increment)
+		{
+			if (mesh.indices[index] == mesh.indices[index + 1]
+				|| mesh.indices[index + 1] == mesh.indices[index + 2]
+				|| mesh.indices[index + 2] == mesh.indices[index])
+			{
+				continue;
+			}
+
+			Vertex_Out& vertex0{ mesh.vertices_out[mesh.indices[index]] };
+			Vertex_Out& vertex1{ mesh.vertices_out[mesh.indices[index + 1]] };
+			Vertex_Out& vertex2{ mesh.vertices_out[mesh.indices[index + 2]] };
+
+			if (vertex0.position.z < 0.f || vertex0.position.z > 1.f
+				|| vertex1.position.z < 0.f || vertex1.position.z > 1.f
+				|| vertex2.position.z < 0.f || vertex2.position.z > 1.f) continue;
+
+			const Vector2 v0{ vertex0.position.x, vertex0.position.y };
+			const Vector2 v1{ vertex1.position.x, vertex1.position.y };
+			const Vector2 v2{ vertex2.position.x, vertex2.position.y };
+
+			float w0{};
+			float w1{};
+			float w2{};
+
+			Vector2 v1ToV2{ v2 - v1 };
+			Vector2 v2ToV0{ v0 - v2 };
+			Vector2 v0ToV1{ v1 - v0 };
+
+			const float area{ Vector2::Cross(v0ToV1, v2 - v0) / 2.f };
+
+			Vector2 min = { std::min(v0.x, v1.x), std::min(v0.y, v1.y) };
+			min.x = std::min(min.x, v2.x);
+			min.x = std::max(min.x, 0.f);
+			min.y = std::min(min.y, v2.y);
+			min.y = std::max(min.y, 0.f);
+
+			Vector2 max = { std::max(v0.x, v1.x), std::max(v0.y, v1.y) };
+			max.x = std::max(max.x, v2.x);
+			max.x = std::min(max.x, static_cast<float>(m_Width));
+			max.y = std::max(max.y, v2.y);
+			max.y = std::min(max.y, static_cast<float>(m_Height));
+
+			for (int px{ static_cast<int>(min.x) }; px < max.x; ++px)
+			{
+				for (int py{ static_cast<int>(min.y) }; py < max.y; ++py)
+				{
+					Vector2 pixelPos = { static_cast<float>(px), static_cast<float>(py) };
+
+					if (mesh.primitiveTopology == PrimitiveTopology::TriangleStrip && index & 0x01)
+					{
+						w0 = Vector2::Cross(v1ToV2, pixelPos - v1);
+
+						if (w0 > 0)
+						{
+							continue;
+						}
+
+						w1 = Vector2::Cross(v2ToV0, pixelPos - v2);
+
+						if (w1 > 0)
+						{
+							continue;
+						}
+
+						w2 = Vector2::Cross(v0ToV1, pixelPos - v0);
+
+						if (w2 > 0)
+						{
+							continue;
+						}
+
+						w0 = (w0 / 2.f) / (-1 * area);
+						w1 = (w1 / 2.f) / (-1 * area);
+						w2 = (w2 / 2.f) / (-1 * area);
+					}
+					else
+					{
+						w0 = Vector2::Cross(v1ToV2, pixelPos - v1);
+
+						if (w0 < 0)
+						{
+							continue;
+						}
+
+						w1 = Vector2::Cross(v2ToV0, pixelPos - v2);
+
+						if (w1 < 0)
+						{
+							continue;
+						}
+
+						w2 = Vector2::Cross(v0ToV1, pixelPos - v0);
+
+						if (w2 < 0)
+						{
+							continue;
+						}
+
+						w0 = (w0 / 2.f) / area;
+						w1 = (w1 / 2.f) / area;
+						w2 = (w2 / 2.f) / area;
+					}
+
+					float depthInterpolated
+					{
+						1.f / ((1.f * w0) / vertex0.position.z
+							   + (1.f * w1) / vertex1.position.z
+							   + (1.f * w2) / vertex2.position.z)
+					};
+
+					int pixelIndex{ py * m_Width + px };
+
+					if (depthInterpolated <= m_pDepthBufferPixels[pixelIndex])
+					{
+						m_pDepthBufferPixels[pixelIndex] = depthInterpolated;
+					}
+					else continue;
+
+					float interpolatedCameraSpaceZ{};
+					ColorRGB finalColor{};
+					Vector2 interpolatedUV{};
+					Vertex_Out pixel{};
+
+					switch (m_RenderMode)
+					{
+					case dae::Renderer::RenderMode::color:
+						interpolatedCameraSpaceZ =
+						{
+							1.f / ((1.f * w0) * vertex0.position.w
+								   + (1.f * w1) * vertex1.position.w
+								   + (1.f * w2) * vertex2.position.w)
+						};
+
+						pixel.position =
+						{
+							vertex0.position * w0
+							+ vertex1.position * w1
+							+ vertex2.position * w2
+						};
+
+						pixel.color =
+						{
+							vertex0.color * w0
+							+ vertex1.color * w1
+							+ vertex2.color * w2
+						};
+
+						pixel.uv =
+						{
+							interpolatedCameraSpaceZ *
+							((vertex0.uv * w0) * vertex0.position.w
+							+ (vertex1.uv * w1) * vertex1.position.w
+							+ (vertex2.uv * w2) * vertex2.position.w)
+						};
+
+						pixel.normal =
+						{
+							Vector3{vertex0.normal * w0
+									+ vertex1.normal * w1
+									+ vertex2.normal * w2}.Normalized()
+						};
+
+						pixel.tangent =
+						{
+							vertex0.tangent * w0
+							+ vertex1.tangent * w1
+							+ vertex2.tangent * w2
+						};
+
+						pixel.viewDirection =
+						{
+							vertex0.viewDirection * w0
+							+ vertex1.viewDirection * w1
+							+ vertex2.viewDirection * w2
+						};
+
+						finalColor = PixelShading(pixel);
+						break;
+
+					case dae::Renderer::RenderMode::depth:
+						const float remappedDepth{ Remap(depthInterpolated, 0.995f) };
+						finalColor = { remappedDepth, remappedDepth, remappedDepth };
+						break;
+					}
+
+					//Update Color in Buffer
+					finalColor.MaxToOne();
+
+					m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+						static_cast<uint8_t>(finalColor.r * 255),
+						static_cast<uint8_t>(finalColor.g * 255),
+						static_cast<uint8_t>(finalColor.b * 255));
+				}
+			}
+		}
+	}
+}
+
+ColorRGB Renderer::PixelShading(const Vertex_Out& vertex) const
+{
+	const Vector3 lightDirection{ 0.577f, -0.577f, 0.577f };
+	const float lightIntensity{ 7.f };
+	const float shininess{ 25.f };
+	ColorRGB ambient{ 0.025f, 0.025f, 0.025f };
+
+	//lambert diffuse
+	ColorRGB diffuseColor{ m_pTexture->Sample(vertex.uv) };
+	ColorRGB color;// { lightIntensity* diffuseColor / static_cast<float>(M_PI) };
+
+	Vector3 pos{ vertex.position.x, vertex.position.y, vertex.position.w  };
+
+	const float observedArea{ Vector3::Dot(vertex.normal, Vector3{lightDirection - pos}.Normalized()) };
+
+	if (observedArea < 0.f) return ColorRGB{};
+
+	color += ColorRGB{ 1.f, 1.f, 1.f } * observedArea;
+
+	//color *= ambient;
+
+	return color;
 }
 
 bool Renderer::SaveBufferToImage() const

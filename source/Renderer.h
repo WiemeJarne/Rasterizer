@@ -76,5 +76,9 @@ namespace dae
 
 		void W3_Part1();
 		void W3_Part2();
+
+		void W4_Part1();
+
+		ColorRGB PixelShading(const Vertex_Out& vertex) const;
 	};
 }
