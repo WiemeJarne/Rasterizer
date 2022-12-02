@@ -162,7 +162,7 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes_world)
 			//set the tangent of the vertex
 			vertexOut.tangent = mesh.worldMatrix.TransformVector(vertex.tangent);
 			//set the viewDirection of the verex
-			vertexOut.viewDirection = mesh.worldMatrix.TransformPoint(vertex.position) - m_Camera.origin;
+			vertexOut.viewDirection = m_Camera.origin - mesh.worldMatrix.TransformPoint(vertex.position);
 
 			mesh.vertices_out.emplace_back(vertexOut);
 		}
@@ -1632,10 +1632,10 @@ void Renderer::W4_Part1()
 
 ColorRGB Renderer::ShadePixel(const Vertex_Out& vertex) const
 {
-	Vector3 lightDirection{ 0.577f, -0.577f, 0.577f };
-	const float lightIntensity{ 7.f };
-	const float shininess{ 25.f };
-	ColorRGB ambient{ 0.025f, 0.025f, 0.025f };
+	const Vector3 lightDirection{ 0.577f, -0.577f, 0.577f };
+	constexpr float lightIntensity{ 7.f };
+	constexpr float shininess{ 25.f };
+	constexpr ColorRGB ambient{ 0.025f, 0.025f, 0.025f };
 
 	Vector3 binormal{ Vector3::Cross(vertex.normal, vertex.tangent) };
 	Matrix tangentSpaceAxis{ vertex.tangent, binormal, vertex.normal, Vector3::Zero };
@@ -1649,16 +1649,16 @@ ColorRGB Renderer::ShadePixel(const Vertex_Out& vertex) const
 
 	//transform the sampledNormal to tangent space
 	Vector3 sampledNormalVector{ sampledNormal.r, sampledNormal.g, sampledNormal.b };
-	sampledNormalVector = tangentSpaceAxis.TransformVector(sampledNormalVector);
-	
+	sampledNormalVector = tangentSpaceAxis.TransformVector(sampledNormalVector).Normalized();
+
 	//lambert diffuse
-	ColorRGB diffuse{ lightIntensity * m_pDiffuseTexture->Sample(vertex.uv) / static_cast<float>(M_PI) };
+	ColorRGB diffuse{ lightIntensity * m_pDiffuseTexture->Sample(vertex.uv) / PI };
 
 	Vector3 pos{ vertex.position.x, vertex.position.y, vertex.position.w  };
 
 	const float observedArea{ std::max(0.f, Vector3::Dot(sampledNormalVector, -lightDirection.Normalized())) };
 
-	ColorRGB phong{ ColorRGB{ 1.f, 1.f, 1.f } * m_pSpecularMap->Sample(vertex.uv) * powf(std::max(Vector3::Dot(2 * std::max(Vector3::Dot(sampledNormalVector, -lightDirection), 0.f) * sampledNormalVector - -lightDirection, -vertex.viewDirection), 0.f), shininess * m_pGlossinessMap->Sample(vertex.uv).r)}; //glossinessMap is greyscale so all channels have the same value
+	ColorRGB phong{ ColorRGB{ 1.f, 1.f, 1.f } * m_pSpecularMap->Sample(vertex.uv) * powf(std::max(Vector3::Dot(2 * std::max(Vector3::Dot(sampledNormalVector, -lightDirection), 0.f) * sampledNormalVector - -lightDirection, vertex.viewDirection), 0.f), shininess * m_pGlossinessMap->Sample(vertex.uv).r)}; //glossinessMap is greyscale so all channels have the same value
 
 	return (diffuse + phong + ambient) * observedArea;
 }
