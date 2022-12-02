@@ -31,7 +31,10 @@ Renderer::Renderer(SDL_Window* pWindow) :
 		m_pDepthBufferPixels[index] = INFINITY;
 	}
 
-	m_pTexture = Texture::LoadFromFile("Resources/vehicle_diffuse.png");
+	m_pDiffuseTexture = Texture::LoadFromFile("Resources/vehicle_diffuse.png");
+	m_pNormalMap = Texture::LoadFromFile("Resources/vehicle_normal.png");
+	m_pSpecularMap = Texture::LoadFromFile("Resources/vehicle_specular.png");
+	m_pGlossinessMap = Texture::LoadFromFile("Resources/vehicle_gloss.png");
 
 	m_MeshesWorld = { Mesh{} };
 	m_MeshesWorld[0].primitiveTopology = PrimitiveTopology::TriangeList;
@@ -55,7 +58,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 Renderer::~Renderer()
 {
 	delete[] m_pDepthBufferPixels;
-	delete m_pTexture;
+	delete m_pDiffuseTexture;
 }
 
 void Renderer::Update(Timer* pTimer)
@@ -142,7 +145,6 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes_world)
 			Vertex_Out vertexOut{};
 
 			vertexOut.position = worldViewProjectionMatirx.TransformPoint({ vertex.position.x, vertex.position.y, vertex.position.z, 0 });
-			vertexOut.normal = mesh.worldMatrix.TransformVector(vertex.normal);
 
 			//perspective divide
 			const float wInversed{ 1.f / vertexOut.position.w };
@@ -156,11 +158,11 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes_world)
 			//set uv of the vertex
 			vertexOut.uv = vertex.uv;
 			//set the normal of the vertex
-			vertexOut.normal = vertex.normal;
+			vertexOut.normal = mesh.worldMatrix.TransformVector(vertex.normal);
 			//set the tangent of the vertex
-			vertexOut.tangent = vertex.tangent;
+			vertexOut.tangent = mesh.worldMatrix.TransformVector(vertex.tangent);
 			//set the viewDirection of the verex
-			vertexOut.viewDirection = vertex.viewDirection;
+			vertexOut.viewDirection = mesh.worldMatrix.TransformPoint(vertex.position) - m_Camera.origin;
 
 			mesh.vertices_out.emplace_back(vertexOut);
 		}
@@ -825,7 +827,7 @@ void Renderer::W2_Part2() const
 
 					Vector2 interpolation{ vertex0.uv * w0 + vertex1.uv * w1 + vertex2.uv * w2 };
 					
-					ColorRGB finalColor{ m_pTexture->Sample(interpolation) };
+					ColorRGB finalColor{ m_pDiffuseTexture->Sample(interpolation) };
 
 					//Update Color in Buffer
 					finalColor.MaxToOne();
@@ -995,7 +997,7 @@ void Renderer::W2_Part3() const
 										 + (vertex2.uv * w2) / vertex2.position.z )
 					};
 
-					ColorRGB finalColor = m_pTexture->Sample(interpolatedUV);
+					ColorRGB finalColor = m_pDiffuseTexture->Sample(interpolatedUV);
 
 					//Update Color in Buffer
 					finalColor.MaxToOne();
@@ -1204,7 +1206,7 @@ void Renderer::W3_Part1()
 										 + (vertex2.uv * w2) * vertex2.position.w)
 					};
 
-					ColorRGB finalColor = m_pTexture->Sample(interpolatedUV);
+					ColorRGB finalColor = m_pDiffuseTexture->Sample(interpolatedUV);
 
 					//Update Color in Buffer
 					finalColor.MaxToOne();
@@ -1386,7 +1388,7 @@ void Renderer::W3_Part2()
 											 + (vertex2.uv * w2) * vertex2.position.w)
 						};
 
-						finalColor = m_pTexture->Sample(interpolatedUV);
+						finalColor = m_pDiffuseTexture->Sample(interpolatedUV);
 						break;
 
 					case dae::Renderer::RenderMode::depth:
@@ -1564,56 +1566,49 @@ void Renderer::W4_Part1()
 					case dae::Renderer::RenderMode::color:
 						interpolatedCameraSpaceZ =
 						{
-							1.f / ((1.f * w0) * vertex0.position.w
-								   + (1.f * w1) * vertex1.position.w
-								   + (1.f * w2) * vertex2.position.w)
+							1.f / (  w0 * vertex0.position.w
+								   + w1 * vertex1.position.w
+								   + w2 * vertex2.position.w)
+						};
+
+						pixel.uv =
+						{
+							interpolatedCameraSpaceZ *
+							(vertex0.uv * w0 * vertex0.position.w
+							+ vertex1.uv * w1 * vertex1.position.w
+							+ vertex2.uv * w2 * vertex2.position.w)
 						};
 
 						pixel.position =
 						{
 							pixelPos.x,
 							pixelPos.y,
-							interpolatedCameraSpaceZ,
-							0
-						};
-
-						pixel.color =
-						{
-							vertex0.color * w0
-							+ vertex1.color * w1
-							+ vertex2.color * w2
-						};
-
-						pixel.uv =
-						{
-							interpolatedCameraSpaceZ *
-							((vertex0.uv * w0) * vertex0.position.w
-							+ (vertex1.uv * w1) * vertex1.position.w
-							+ (vertex2.uv * w2) * vertex2.position.w)
+							depthInterpolated,
+							interpolatedCameraSpaceZ
 						};
 
 						pixel.normal =
 						{
-							Vector3{vertex0.normal * w0
-									+ vertex1.normal * w1
-									+ vertex2.normal * w2}.Normalized()
+							Vector3{vertex0.normal * w0 * vertex0.position.w
+									+ vertex1.normal * w1 * vertex1.position.w
+									+ vertex2.normal * w2 * vertex2.position.w}.Normalized()
 						};
 
 						pixel.tangent =
 						{
-							vertex0.tangent * w0
-							+ vertex1.tangent * w1
-							+ vertex2.tangent * w2
+							Vector3{vertex0.tangent * w0 * vertex0.position.w
+									+ vertex1.tangent * w1 * vertex1.position.w
+									+ vertex2.tangent * w2 * vertex2.position.w}.Normalized()
 						};
 
 						pixel.viewDirection =
 						{
-							vertex0.viewDirection * w0
-							+ vertex1.viewDirection * w1
-							+ vertex2.viewDirection * w2
+							Vector3{vertex0.viewDirection * w0 * vertex0.position.w
+									+ vertex1.viewDirection * w1 * vertex1.position.w
+									+ vertex2.viewDirection * w2 * vertex2.position.w}.Normalized()
 						};
 
-						finalColor = PixelShading(pixel);
+						finalColor = ShadePixel(pixel);
 						break;
 
 					case dae::Renderer::RenderMode::depth:
@@ -1635,26 +1630,37 @@ void Renderer::W4_Part1()
 	}
 }
 
-ColorRGB Renderer::PixelShading(const Vertex_Out& vertex) const
+ColorRGB Renderer::ShadePixel(const Vertex_Out& vertex) const
 {
-	const Vector3 lightDirection{ 0.577f, -0.577f, 0.577f };
+	Vector3 lightDirection{ 0.577f, -0.577f, 0.577f };
 	const float lightIntensity{ 7.f };
 	const float shininess{ 25.f };
 	ColorRGB ambient{ 0.025f, 0.025f, 0.025f };
 
+	Vector3 binormal{ Vector3::Cross(vertex.normal, vertex.tangent) };
+	Matrix tangentSpaceAxis{ vertex.tangent, binormal, vertex.normal, Vector3::Zero };
+
+	ColorRGB sampledNormal{ m_pNormalMap->Sample(vertex.uv) };
+
+	//remap the normal values to range [-1, 1]
+	sampledNormal.r = 2.f * sampledNormal.r - 1.f;
+	sampledNormal.g = 2.f * sampledNormal.g - 1.f;
+	sampledNormal.b = 2.f * sampledNormal.b - 1.f;
+
+	//transform the sampledNormal to tangent space
+	Vector3 sampledNormalVector{ sampledNormal.r, sampledNormal.g, sampledNormal.b };
+	sampledNormalVector = tangentSpaceAxis.TransformVector(sampledNormalVector);
+	
 	//lambert diffuse
-	ColorRGB diffuseColor{ m_pTexture->Sample(vertex.uv) };
-	ColorRGB color;// { lightIntensity* diffuseColor / static_cast<float>(M_PI) };
+	ColorRGB diffuse{ lightIntensity * m_pDiffuseTexture->Sample(vertex.uv) / static_cast<float>(M_PI) };
 
 	Vector3 pos{ vertex.position.x, vertex.position.y, vertex.position.w  };
 
-	const float observedArea{ Vector3::Dot(vertex.normal, Vector3{pos - lightDirection}.Normalized()) };
+	const float observedArea{ std::max(0.f, Vector3::Dot(sampledNormalVector, -lightDirection.Normalized())) };
 
-	if (observedArea < 0.f) return ColorRGB{};
+	ColorRGB phong{ ColorRGB{ 1.f, 1.f, 1.f } * m_pSpecularMap->Sample(vertex.uv) * powf(std::max(Vector3::Dot(2 * std::max(Vector3::Dot(sampledNormalVector, -lightDirection), 0.f) * sampledNormalVector - -lightDirection, -vertex.viewDirection), 0.f), shininess * m_pGlossinessMap->Sample(vertex.uv).r)}; //glossinessMap is greyscale so all channels have the same value
 
-	color += ColorRGB{ 1.f, 1.f, 1.f } * observedArea;
-
-	return color;
+	return (diffuse + phong + ambient) * observedArea;
 }
 
 bool Renderer::SaveBufferToImage() const

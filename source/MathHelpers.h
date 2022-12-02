@@ -57,11 +57,11 @@ namespace dae
 		return v;
 	}
 
-	inline float Remap(float depthValue, const float low = 0.985f, const float high = 1.f)
+	inline float Remap(float value, const float low = 0.985f, const float high = 1.f)
 	{
-		if (depthValue < low) depthValue = low;
-		else if (depthValue > high) depthValue = high;
+		value = std::max(value, low);
+		value = std::min(value, high);
 
-		return     (depthValue - low) / (high - low);
+		return (value - low) / (high - low);
 	}
 }

@@ -49,7 +49,10 @@ namespace dae
 		int m_Width{};
 		int m_Height{};
 
-		Texture* m_pTexture{};
+		Texture* m_pDiffuseTexture{};
+		Texture* m_pNormalMap{};
+		Texture* m_pSpecularMap{};
+		Texture* m_pGlossinessMap{};
 
 		std::vector<Mesh> m_MeshesWorld{};
 
@@ -79,6 +82,6 @@ namespace dae
 
 		void W4_Part1();
 
-		ColorRGB PixelShading(const Vertex_Out& vertex) const;
+		ColorRGB ShadePixel(const Vertex_Out& vertex) const;
 	};
 }
