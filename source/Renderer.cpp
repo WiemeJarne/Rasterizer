@@ -1605,7 +1605,7 @@ void Renderer::W4_Part1()
 						{
 							Vector3{vertex0.viewDirection * w0 * vertex0.position.w
 									+ vertex1.viewDirection * w1 * vertex1.position.w
-									+ vertex2.viewDirection * w2 * vertex2.position.w}.Normalized()
+									+ vertex2.viewDirection * w2 * vertex2.position.w}
 						};
 
 						finalColor = ShadePixel(pixel);
@@ -1656,9 +1656,9 @@ ColorRGB Renderer::ShadePixel(const Vertex_Out& vertex) const
 
 	Vector3 pos{ vertex.position.x, vertex.position.y, vertex.position.w  };
 
-	const float observedArea{ std::max(0.f, Vector3::Dot(sampledNormalVector, -lightDirection.Normalized())) };
+	const float observedArea{ std::max(0.f, Vector3::Dot(sampledNormalVector, -lightDirection)) };
 
-	ColorRGB phong{ ColorRGB{ 1.f, 1.f, 1.f } * m_pSpecularMap->Sample(vertex.uv) * powf(std::max(Vector3::Dot(2 * std::max(Vector3::Dot(sampledNormalVector, -lightDirection), 0.f) * sampledNormalVector - -lightDirection, vertex.viewDirection), 0.f), shininess * m_pGlossinessMap->Sample(vertex.uv).r)}; //glossinessMap is greyscale so all channels have the same value
+	ColorRGB phong{ m_pSpecularMap->Sample(vertex.uv) * powf(std::max(Vector3::Dot(2.f * std::max(Vector3::Dot(sampledNormalVector, -lightDirection), 0.f) * sampledNormalVector - -lightDirection, vertex.viewDirection), 0.f), shininess * m_pGlossinessMap->Sample(vertex.uv).r)}; //glossinessMap is greyscale so all channels have the same value
 
 	return (diffuse + phong + ambient) * observedArea;
 }
