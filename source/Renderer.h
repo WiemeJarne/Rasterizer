@@ -35,6 +35,15 @@ namespace dae
 
 		void ChangeRenderMode();
 
+		void SetIsRotating(bool isRotating);
+		bool GetIsRotating() const;
+
+		void SetUseNormalMap(bool useNormalMap);
+		bool GetUseNormalMap() const;
+
+		void SetVisualizeDepthBuffer(bool visualizeDepthBuffer);
+		bool GetVisualizeDepthBuffer() const;
+
 	private:
 		SDL_Window* m_pWindow{};
 
@@ -56,13 +65,19 @@ namespace dae
 
 		std::vector<Mesh> m_MeshesWorld{};
 
+		bool m_IsRotating{ true };
+		bool m_UseNormalMap{ true };
+		bool m_VisualizeDepthBuffer{ false };
+
 		enum class RenderMode
 		{
-			color,
-			depth
+			combined,
+			observedArea,
+			diffuse, //(incl. observed area)
+			specular //(incl. observed area)
 		};
 
-		RenderMode m_RenderMode{ RenderMode::color };
+		RenderMode m_RenderMode{ RenderMode::combined };
 
 		//Function that transforms the vertices from the mesh from World space to Screen space
 		void VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const;

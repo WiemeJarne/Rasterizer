@@ -59,13 +59,22 @@ Renderer::~Renderer()
 {
 	delete[] m_pDepthBufferPixels;
 	delete m_pDiffuseTexture;
+	delete m_pNormalMap;
+	delete m_pSpecularMap;
+	delete m_pGlossinessMap;
 }
 
 void Renderer::Update(Timer* pTimer)
 {
 	m_Camera.Update(pTimer);
 
-	m_MeshesWorld[0].worldMatrix = Matrix::CreateRotationY( pTimer->GetTotal()) * Matrix::CreateTranslation(0.f, 0.f, 50.f);
+	if (m_IsRotating)
+	{
+		float rotationSpeed{1.f};
+		m_MeshesWorld[0].rotationAngle += rotationSpeed * pTimer->GetElapsed();
+		Remap(m_MeshesWorld[0].rotationAngle, 0, 360);
+		m_MeshesWorld[0].worldMatrix = Matrix::CreateRotationY(m_MeshesWorld[0].rotationAngle) * Matrix::CreateTranslation(m_MeshesWorld[0].worldMatrix.GetTranslation());
+	}
 }
 
 void Renderer::Render()
@@ -1373,7 +1382,7 @@ void Renderer::W3_Part2()
 
 					switch (m_RenderMode)
 					{
-					case dae::Renderer::RenderMode::color:
+					case dae::Renderer::RenderMode::combined:
 						interpolatedCameraSpaceZ =
 						{
 							1.f / ((1.f * w0) * vertex0.position.w
@@ -1391,7 +1400,7 @@ void Renderer::W3_Part2()
 						finalColor = m_pDiffuseTexture->Sample(interpolatedUV);
 						break;
 
-					case dae::Renderer::RenderMode::depth:
+					case dae::Renderer::RenderMode::observedArea:
 						const float remappedDepth{ Remap(depthInterpolated, 0.995f) };
 						finalColor = { remappedDepth, remappedDepth, remappedDepth };
 						break;
@@ -1560,62 +1569,52 @@ void Renderer::W4_Part1()
 					ColorRGB finalColor{};
 					Vector2 interpolatedUV{};
 					Vertex_Out pixel{};
-
-					switch (m_RenderMode)
+					
+					interpolatedCameraSpaceZ =
 					{
-					case dae::Renderer::RenderMode::color:
-						interpolatedCameraSpaceZ =
-						{
-							1.f / (  w0 * vertex0.position.w
-								   + w1 * vertex1.position.w
-								   + w2 * vertex2.position.w)
-						};
+						1.f / (  w0 * vertex0.position.w
+							   + w1 * vertex1.position.w
+							   + w2 * vertex2.position.w)
+					};
 
-						pixel.uv =
-						{
-							interpolatedCameraSpaceZ *
-							(vertex0.uv * w0 * vertex0.position.w
-							+ vertex1.uv * w1 * vertex1.position.w
-							+ vertex2.uv * w2 * vertex2.position.w)
-						};
+					pixel.uv =
+					{
+						interpolatedCameraSpaceZ *
+						(vertex0.uv * w0 * vertex0.position.w
+						+ vertex1.uv * w1 * vertex1.position.w
+						+ vertex2.uv * w2 * vertex2.position.w)
+					};
 
-						pixel.position =
-						{
-							pixelPos.x,
-							pixelPos.y,
-							depthInterpolated,
-							interpolatedCameraSpaceZ
-						};
+					pixel.position =
+					{
+						pixelPos.x,
+						pixelPos.y,
+						depthInterpolated,
+						interpolatedCameraSpaceZ
+					};
 
-						pixel.normal =
-						{
-							Vector3{vertex0.normal * w0 * vertex0.position.w
-									+ vertex1.normal * w1 * vertex1.position.w
-									+ vertex2.normal * w2 * vertex2.position.w}.Normalized()
-						};
+					pixel.normal =
+					{
+						Vector3{vertex0.normal * w0 * vertex0.position.w
+								+ vertex1.normal * w1 * vertex1.position.w
+								+ vertex2.normal * w2 * vertex2.position.w}.Normalized()
+					};
 
-						pixel.tangent =
-						{
-							Vector3{vertex0.tangent * w0 * vertex0.position.w
-									+ vertex1.tangent * w1 * vertex1.position.w
-									+ vertex2.tangent * w2 * vertex2.position.w}.Normalized()
-						};
+					pixel.tangent =
+					{
+						Vector3{vertex0.tangent * w0 * vertex0.position.w
+								+ vertex1.tangent * w1 * vertex1.position.w
+								+ vertex2.tangent * w2 * vertex2.position.w}.Normalized()
+					};
 
-						pixel.viewDirection =
-						{
-							Vector3{vertex0.viewDirection * w0 * vertex0.position.w
-									+ vertex1.viewDirection * w1 * vertex1.position.w
-									+ vertex2.viewDirection * w2 * vertex2.position.w}
-						};
+					pixel.viewDirection =
+					{
+						Vector3{vertex0.viewDirection * w0 * vertex0.position.w
+								+ vertex1.viewDirection * w1 * vertex1.position.w
+								+ vertex2.viewDirection * w2 * vertex2.position.w}
+					};
 
-						finalColor = ShadePixel(pixel);
-						break;
-
-					case dae::Renderer::RenderMode::depth:
-						const float remappedDepth{ Remap(depthInterpolated, 0.995f) };
-						finalColor = { remappedDepth, remappedDepth, remappedDepth };
-						break;
-					}
+					finalColor = ShadePixel(pixel);
 
 					//Update Color in Buffer
 					finalColor.MaxToOne();
@@ -1632,35 +1631,67 @@ void Renderer::W4_Part1()
 
 ColorRGB Renderer::ShadePixel(const Vertex_Out& vertex) const
 {
+	if (m_VisualizeDepthBuffer)
+	{
+		const float value{ Remap(vertex.position.z, 0.995f) };
+		return {value, value, value};
+	}
+
+	float observedArea{};
 	const Vector3 lightDirection{ 0.577f, -0.577f, 0.577f };
 	constexpr float lightIntensity{ 7.f };
 	constexpr float shininess{ 25.f };
-	constexpr ColorRGB ambient{ 0.025f, 0.025f, 0.025f };
+	Vector3 normal{ vertex.normal };
 
-	Vector3 binormal{ Vector3::Cross(vertex.normal, vertex.tangent) };
-	Matrix tangentSpaceAxis{ vertex.tangent, binormal, vertex.normal, Vector3::Zero };
+	if (m_UseNormalMap)
+	{
+		ColorRGB sampledNormal{ m_pNormalMap->Sample(vertex.uv) };
 
-	ColorRGB sampledNormal{ m_pNormalMap->Sample(vertex.uv) };
+		//remap the normal values to range [-1, 1]
+		sampledNormal.r = 2.f * sampledNormal.r - 1.f;
+		sampledNormal.g = 2.f * sampledNormal.g - 1.f;
+		sampledNormal.b = 2.f * sampledNormal.b - 1.f;
 
-	//remap the normal values to range [-1, 1]
-	sampledNormal.r = 2.f * sampledNormal.r - 1.f;
-	sampledNormal.g = 2.f * sampledNormal.g - 1.f;
-	sampledNormal.b = 2.f * sampledNormal.b - 1.f;
+		Vector3 binormal{ Vector3::Cross(vertex.normal, vertex.tangent) };
+		Matrix tangentSpaceAxis{ vertex.tangent, binormal, vertex.normal, Vector3::Zero };
 
-	//transform the sampledNormal to tangent space
-	Vector3 sampledNormalVector{ sampledNormal.r, sampledNormal.g, sampledNormal.b };
-	sampledNormalVector = tangentSpaceAxis.TransformVector(sampledNormalVector).Normalized();
+		//transform the sampledNormal to tangent space
+		normal = { sampledNormal.r, sampledNormal.g, sampledNormal.b };
+		normal = tangentSpaceAxis.TransformVector(normal).Normalized();
+	}
 
-	//lambert diffuse
-	ColorRGB diffuse{ lightIntensity * m_pDiffuseTexture->Sample(vertex.uv) / PI };
+	observedArea = std::max(0.f, Vector3::Dot(normal, -lightDirection));
 
-	Vector3 pos{ vertex.position.x, vertex.position.y, vertex.position.w  };
+	switch (m_RenderMode)
+	{
+		case dae::Renderer::RenderMode::combined:
+		{
+			constexpr ColorRGB ambient{ 0.025f, 0.025f, 0.025f };
 
-	const float observedArea{ std::max(0.f, Vector3::Dot(sampledNormalVector, -lightDirection)) };
+			//lambert diffuse
+			ColorRGB diffuse{ lightIntensity * m_pDiffuseTexture->Sample(vertex.uv) / PI };
 
-	ColorRGB phong{ m_pSpecularMap->Sample(vertex.uv) * powf(std::max(Vector3::Dot(2.f * std::max(Vector3::Dot(sampledNormalVector, -lightDirection), 0.f) * sampledNormalVector - -lightDirection, vertex.viewDirection), 0.f), shininess * m_pGlossinessMap->Sample(vertex.uv).r)}; //glossinessMap is greyscale so all channels have the same value
+			//specular phong
+			ColorRGB specular{ m_pSpecularMap->Sample(vertex.uv) * powf(std::max(Vector3::Dot(2.f * std::max(Vector3::Dot(normal, -lightDirection), 0.f) * normal - -lightDirection, vertex.viewDirection), 0.f), shininess * m_pGlossinessMap->Sample(vertex.uv).r) }; //glossinessMap is greyscale so all channels have the same value
 
-	return (diffuse + phong + ambient) * observedArea;
+			return (diffuse + specular + ambient) * observedArea;
+		}
+	
+		case dae::Renderer::RenderMode::observedArea:
+			return { observedArea, observedArea, observedArea };
+
+		case dae::Renderer::RenderMode::diffuse:
+		{
+			ColorRGB diffuse{ lightIntensity * m_pDiffuseTexture->Sample(vertex.uv) / PI };
+			return diffuse * observedArea;
+		}
+
+		case dae::Renderer::RenderMode::specular:
+		{
+			ColorRGB specular{ m_pSpecularMap->Sample(vertex.uv) * powf(std::max(Vector3::Dot(2.f * std::max(Vector3::Dot(normal, -lightDirection), 0.f) * normal - -lightDirection, vertex.viewDirection), 0.f), shininess * m_pGlossinessMap->Sample(vertex.uv).r) }; //glossinessMap is greyscale so all channels have the same value
+			return specular * observedArea;
+		}
+	}
 }
 
 bool Renderer::SaveBufferToImage() const
@@ -1672,12 +1703,49 @@ void Renderer::ChangeRenderMode()
 {
 	switch (m_RenderMode)
 	{
-	case dae::Renderer::RenderMode::color:
-		m_RenderMode = RenderMode::depth;
+	case RenderMode::combined:
+		m_RenderMode = RenderMode::observedArea;
 		break;
 
-	case dae::Renderer::RenderMode::depth:
-		m_RenderMode = RenderMode::color;
+	case RenderMode::observedArea:
+		m_RenderMode = RenderMode::diffuse;
 		break;
+
+	case RenderMode::diffuse:
+		m_RenderMode = RenderMode::specular;
+		break;
+
+	case RenderMode::specular:
+		m_RenderMode = RenderMode::combined;
 	}
+}
+
+void Renderer::SetIsRotating(bool isRotating)
+{
+	m_IsRotating = isRotating;
+}
+
+bool Renderer::GetIsRotating() const
+{
+	return m_IsRotating;
+}
+
+void Renderer::SetUseNormalMap(bool useNormalMap)
+{
+	m_UseNormalMap = useNormalMap;
+}
+
+bool Renderer::GetUseNormalMap() const
+{
+	return m_UseNormalMap;
+}
+
+void Renderer::SetVisualizeDepthBuffer(bool visualizeDepthBuffer)
+{
+	m_VisualizeDepthBuffer = visualizeDepthBuffer;
+}
+
+bool Renderer::GetVisualizeDepthBuffer() const
+{
+	return m_VisualizeDepthBuffer;
 }

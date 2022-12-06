@@ -38,5 +38,6 @@ namespace dae
 
 		std::vector<Vertex_Out> vertices_out{};
 		Matrix worldMatrix{};
+		float rotationAngle{};
 	};
 }
