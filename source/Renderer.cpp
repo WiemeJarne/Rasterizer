@@ -72,7 +72,6 @@ void Renderer::Update(Timer* pTimer)
 	{
 		float rotationSpeed{1.f};
 		m_MeshesWorld[0].rotationAngle += rotationSpeed * pTimer->GetElapsed();
-		Remap(m_MeshesWorld[0].rotationAngle, 0, 360);
 		m_MeshesWorld[0].worldMatrix = Matrix::CreateRotationY(m_MeshesWorld[0].rotationAngle) * Matrix::CreateTranslation(m_MeshesWorld[0].worldMatrix.GetTranslation());
 	}
 }
