@@ -21,7 +21,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	//Create Buffers
 	m_pFrontBuffer = SDL_GetWindowSurface(pWindow);
 	m_pBackBuffer = SDL_CreateRGBSurface(0, m_Width, m_Height, 32, 0, 0, 0, 0);
-	m_pBackBufferPixels = (uint32_t*)m_pBackBuffer->pixels;
+	m_pBackBufferPixels = (uint32_t*)m_pBackBuffer->pixels;	
 
 	const int amountOfPixels{ m_Width * m_Height };
 	m_pDepthBufferPixels = new float[amountOfPixels];
@@ -31,34 +31,45 @@ Renderer::Renderer(SDL_Window* pWindow) :
 		m_pDepthBufferPixels[index] = INFINITY;
 	}
 
-	m_pDiffuseTexture = Texture::LoadFromFile("Resources/vehicle_diffuse.png");
+	m_pCombustionEffectDiffuseMap = Texture::LoadFromFile("Resources/fireFX_diffuse.png");
+	m_pVehicleDiffuseTexture = Texture::LoadFromFile("Resources/vehicle_diffuse.png");
 	m_pNormalMap = Texture::LoadFromFile("Resources/vehicle_normal.png");
 	m_pSpecularMap = Texture::LoadFromFile("Resources/vehicle_specular.png");
 	m_pGlossinessMap = Texture::LoadFromFile("Resources/vehicle_gloss.png");
 
-	m_MeshesWorld = { Mesh{} };
+	m_MeshesWorld = { Mesh{}, Mesh{} };
 	m_MeshesWorld[0].primitiveTopology = PrimitiveTopology::TriangeList;
+	m_MeshesWorld[1].primitiveTopology = PrimitiveTopology::TriangeList;
 
 	Utils::ParseOBJ("Resources/vehicle.obj", m_MeshesWorld[0].vertices, m_MeshesWorld[0].indices);
+	Utils::ParseOBJ("Resources/fireFX.obj", m_MeshesWorld[1].vertices, m_MeshesWorld[1].indices);
 
 	m_MeshesWorld[0].worldMatrix =
 	{
 		{1, 0, 0, 0},
 		{0, 1, 0, 0},
 		{0, 0, 1, 0},
-		{0, 0, 50, 1}
+		{0, 0, 0, 1}
+	};
+
+	m_MeshesWorld[1].worldMatrix =
+	{
+		{1, 0, 0, 0},
+		{0, 1, 0, 0},
+		{0, 0, 1, 0},
+		{0, 0, 0, 1}
 	};
 
 	//Initialize Camera
 	//m_Camera.Initialize(60.f, { .0f,.0f,-10.f }, static_cast<float>(m_Width) / m_Height);
 	//m_Camera.Initialize(60.f, { 0.f, 5.f, -30.f }, static_cast<float>(m_Width) / m_Height);
-	m_Camera.Initialize(45.f, { 0.f, 0.f, 0.f }, static_cast<float>(m_Width) / m_Height);
+	m_Camera.Initialize(45.f, { 0.f, 0.f, -50.f }, static_cast<float>(m_Width) / m_Height);
 }
 
 Renderer::~Renderer()
 {
 	delete[] m_pDepthBufferPixels;
-	delete m_pDiffuseTexture;
+	delete m_pVehicleDiffuseTexture;
 	delete m_pNormalMap;
 	delete m_pSpecularMap;
 	delete m_pGlossinessMap;
@@ -73,6 +84,8 @@ void Renderer::Update(Timer* pTimer)
 		float rotationSpeed{1.f};
 		m_MeshesWorld[0].rotationAngle += rotationSpeed * pTimer->GetElapsed();
 		m_MeshesWorld[0].worldMatrix = Matrix::CreateRotationY(m_MeshesWorld[0].rotationAngle) * Matrix::CreateTranslation(m_MeshesWorld[0].worldMatrix.GetTranslation());
+		m_MeshesWorld[1].rotationAngle += rotationSpeed * pTimer->GetElapsed();
+		m_MeshesWorld[1].worldMatrix = Matrix::CreateRotationY(m_MeshesWorld[0].rotationAngle) * Matrix::CreateTranslation(m_MeshesWorld[0].worldMatrix.GetTranslation());
 	}
 }
 
@@ -217,7 +230,7 @@ void Renderer::W1_Part1() const
 				&& Vector2::Cross(edge2, p1ToPixel) > 0
 				&& Vector2::Cross(edge3, p2ToPixel) > 0)
 			{
-				ColorRGB finalColor{ 1, 1, 1 };
+				ColorRGBA finalColor{ 1, 1, 1 };
 
 				//Update Color in Buffer
 				finalColor.MaxToOne();
@@ -271,7 +284,7 @@ void Renderer::W1_Part2() const
 			gradient += py / static_cast<float>(m_Width);
 			gradient /= 2.0f;
 
-			ColorRGB finalColor{ 1, 1, 1 };
+			ColorRGBA finalColor{ 1, 1, 1 };
 
 			//Update Color in Buffer
 			finalColor.MaxToOne();
@@ -327,7 +340,7 @@ void Renderer::W1_Part3() const
 				continue;
 			}
 
-			ColorRGB finalColor{ transformed_vertices_world[0].color * w0 + transformed_vertices_world[1].color * w1 + transformed_vertices_world[2].color * w2 };
+			ColorRGBA finalColor{ transformed_vertices_world[0].color * w0 + transformed_vertices_world[1].color * w1 + transformed_vertices_world[2].color * w2 };
 
 			//Update Color in Buffer
 			finalColor.MaxToOne();
@@ -403,7 +416,7 @@ void Renderer::W1_Part4() const
 				}
 				else continue;
 
-				ColorRGB finalColor
+				ColorRGBA finalColor
 				{ transformed_vertices_world[index * 3].color * w0
 				  + transformed_vertices_world[index * 3 + 1].color * w1
 				  + transformed_vertices_world[index * 3 + 2].color * w2 };
@@ -456,7 +469,7 @@ void Renderer::W1_Part5() const
 		Vector2 pixel{};
 		int pixelIndex{};
 		float depthValue{};
-		ColorRGB finalColor{};
+		ColorRGBA finalColor{};
 		float w0{};
 		float w1{};
 		float w2{};
@@ -680,7 +693,7 @@ void Renderer::W2_Part1() const
 					}
 					else continue;
 
-					ColorRGB finalColor
+					ColorRGBA finalColor
 					{   vertex0.color * w0
 					  + vertex1.color * w1
 					  + vertex2.color * w2 };
@@ -835,7 +848,7 @@ void Renderer::W2_Part2() const
 
 					Vector2 interpolation{ vertex0.uv * w0 + vertex1.uv * w1 + vertex2.uv * w2 };
 					
-					ColorRGB finalColor{ m_pDiffuseTexture->Sample(interpolation) };
+					ColorRGBA finalColor{ m_pVehicleDiffuseTexture->Sample(interpolation) };
 
 					//Update Color in Buffer
 					finalColor.MaxToOne();
@@ -1005,7 +1018,7 @@ void Renderer::W2_Part3() const
 										 + (vertex2.uv * w2) / vertex2.position.z )
 					};
 
-					ColorRGB finalColor = m_pDiffuseTexture->Sample(interpolatedUV);
+					ColorRGBA finalColor = m_pVehicleDiffuseTexture->Sample(interpolatedUV);
 
 					//Update Color in Buffer
 					finalColor.MaxToOne();
@@ -1214,7 +1227,7 @@ void Renderer::W3_Part1()
 										 + (vertex2.uv * w2) * vertex2.position.w)
 					};
 
-					ColorRGB finalColor = m_pDiffuseTexture->Sample(interpolatedUV);
+					ColorRGBA finalColor = m_pVehicleDiffuseTexture->Sample(interpolatedUV);
 
 					//Update Color in Buffer
 					finalColor.MaxToOne();
@@ -1376,7 +1389,7 @@ void Renderer::W3_Part2()
 					else continue;
 
 					float interpolatedCameraSpaceZ{};
-					ColorRGB finalColor{};
+					ColorRGBA finalColor{};
 					Vector2 interpolatedUV{};
 
 					switch (m_RenderMode)
@@ -1396,7 +1409,7 @@ void Renderer::W3_Part2()
 											 + (vertex2.uv * w2) * vertex2.position.w)
 						};
 
-						finalColor = m_pDiffuseTexture->Sample(interpolatedUV);
+						finalColor = m_pVehicleDiffuseTexture->Sample(interpolatedUV);
 						break;
 
 					case dae::Renderer::RenderMode::observedArea:
@@ -1421,7 +1434,7 @@ void Renderer::W3_Part2()
 void Renderer::W4_Part1()
 {
 	VertexTransformationFunction(m_MeshesWorld);
-
+	int number{};
 	const int amountOfMeshes{ static_cast<int>(m_MeshesWorld.size()) };
 	for (Mesh& mesh : m_MeshesWorld)
 	{
@@ -1558,14 +1571,23 @@ void Renderer::W4_Part1()
 
 					int pixelIndex{ py * m_Width + px };
 
-					if (depthInterpolated <= m_pDepthBufferPixels[pixelIndex])
+					if (number == 1)
 					{
-						m_pDepthBufferPixels[pixelIndex] = depthInterpolated;
+						if (depthInterpolated >= m_pDepthBufferPixels[pixelIndex])
+							continue;
 					}
-					else continue;
-
+					
+					if (number == 0)
+					{
+						if (depthInterpolated <= m_pDepthBufferPixels[pixelIndex])
+						{
+							m_pDepthBufferPixels[pixelIndex] = depthInterpolated;
+						}
+						else continue;
+					}
+					
 					float interpolatedCameraSpaceZ{};
-					ColorRGB finalColor{};
+					ColorRGBA finalColor{};
 					Vector2 interpolatedUV{};
 					Vertex_Out pixel{};
 					
@@ -1613,11 +1635,28 @@ void Renderer::W4_Part1()
 								+ vertex2.viewDirection * w2 * vertex2.position.w}
 					};
 
-					finalColor = ShadePixel(pixel);
+					finalColor = ShadePixel(pixel, number);
+
+					if (number == 1)
+					{
+						SDL_GetRGB(m_pBackBufferPixels[static_cast<int>(pixel.position.x) + (static_cast<int>(pixel.position.y) * m_Width)], m_pBackBuffer->format, m_pBufferRValue, m_pBufferGValue, m_pBufferBValue);
+
+						finalColor.a = std::min(1.f, finalColor.a);
+
+						const float inverseAplha{ 1.f - finalColor.a };
+						const float division{ 1 / 255.f };
+
+						finalColor =
+						{
+							finalColor.r * finalColor.a + *m_pBufferRValue * division * inverseAplha,
+							finalColor.g * finalColor.a + *m_pBufferGValue * division * inverseAplha,
+							finalColor.b * finalColor.a + *m_pBufferBValue * division * inverseAplha 
+						};
+					}
 
 					//Update Color in Buffer
 					finalColor.MaxToOne();
-
+					
 					m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
 						static_cast<uint8_t>(finalColor.r * 255),
 						static_cast<uint8_t>(finalColor.g * 255),
@@ -1625,10 +1664,11 @@ void Renderer::W4_Part1()
 				}
 			}
 		}
+		++number;
 	}
 }
 
-ColorRGB Renderer::ShadePixel(const Vertex_Out& vertex) const
+ColorRGBA Renderer::ShadePixel(const Vertex_Out& vertex, int number) const
 {
 	if (m_VisualizeDepthBuffer)
 	{
@@ -1644,12 +1684,13 @@ ColorRGB Renderer::ShadePixel(const Vertex_Out& vertex) const
 
 	if (m_UseNormalMap)
 	{
-		ColorRGB sampledNormal{ m_pNormalMap->Sample(vertex.uv) };
+		ColorRGBA sampledNormal{ m_pNormalMap->Sample(vertex.uv) };
 
 		//remap the normal values to range [-1, 1]
 		sampledNormal.r = 2.f * sampledNormal.r - 1.f;
 		sampledNormal.g = 2.f * sampledNormal.g - 1.f;
 		sampledNormal.b = 2.f * sampledNormal.b - 1.f;
+		sampledNormal.a = 2.f * sampledNormal.a - 1.f;
 
 		Vector3 binormal{ Vector3::Cross(vertex.normal, vertex.tangent) };
 		Matrix tangentSpaceAxis{ vertex.tangent, binormal, vertex.normal, Vector3::Zero };
@@ -1658,20 +1699,29 @@ ColorRGB Renderer::ShadePixel(const Vertex_Out& vertex) const
 		normal = { sampledNormal.r, sampledNormal.g, sampledNormal.b };
 		normal = tangentSpaceAxis.TransformVector(normal).Normalized();
 	}
-
+	
 	observedArea = std::max(0.f, Vector3::Dot(normal, -lightDirection));
 
 	switch (m_RenderMode)
 	{
 		case dae::Renderer::RenderMode::combined:
 		{
-			constexpr ColorRGB ambient{ 0.025f, 0.025f, 0.025f };
+			constexpr ColorRGBA ambient{ 0.025f, 0.025f, 0.025f };
 
 			//lambert diffuse
-			ColorRGB diffuse{ lightIntensity * m_pDiffuseTexture->Sample(vertex.uv) / PI };
+			ColorRGBA diffuse{};
+			if (number == 0)
+			{
+				diffuse = lightIntensity * m_pVehicleDiffuseTexture->Sample(vertex.uv) / PI;
+			}
+			else
+			{
+				diffuse = lightIntensity * m_pCombustionEffectDiffuseMap->Sample(vertex.uv) / PI;
+				return diffuse;
+			}
 
 			//specular phong
-			ColorRGB specular{ m_pSpecularMap->Sample(vertex.uv) * powf(std::max(Vector3::Dot(2.f * std::max(Vector3::Dot(normal, -lightDirection), 0.f) * normal - -lightDirection, vertex.viewDirection), 0.f), shininess * m_pGlossinessMap->Sample(vertex.uv).r) }; //glossinessMap is greyscale so all channels have the same value
+			ColorRGBA specular{ m_pSpecularMap->Sample(vertex.uv) * powf(std::max(Vector3::Dot(2.f * std::max(Vector3::Dot(normal, -lightDirection), 0.f) * normal - -lightDirection, vertex.viewDirection), 0.f), shininess * m_pGlossinessMap->Sample(vertex.uv).r) }; //glossinessMap is greyscale so all channels have the same value
 
 			return (diffuse + specular + ambient) * observedArea;
 		}
@@ -1681,13 +1731,13 @@ ColorRGB Renderer::ShadePixel(const Vertex_Out& vertex) const
 
 		case dae::Renderer::RenderMode::diffuse:
 		{
-			ColorRGB diffuse{ lightIntensity * m_pDiffuseTexture->Sample(vertex.uv) / PI };
+			ColorRGBA diffuse{ lightIntensity * m_pVehicleDiffuseTexture->Sample(vertex.uv) / PI };
 			return diffuse * observedArea;
 		}
 
 		case dae::Renderer::RenderMode::specular:
 		{
-			ColorRGB specular{ m_pSpecularMap->Sample(vertex.uv) * powf(std::max(Vector3::Dot(2.f * std::max(Vector3::Dot(normal, -lightDirection), 0.f) * normal - -lightDirection, vertex.viewDirection), 0.f), shininess * m_pGlossinessMap->Sample(vertex.uv).r) }; //glossinessMap is greyscale so all channels have the same value
+			ColorRGBA specular{ m_pSpecularMap->Sample(vertex.uv) * powf(std::max(Vector3::Dot(2.f * std::max(Vector3::Dot(normal, -lightDirection), 0.f) * normal - -lightDirection, vertex.viewDirection), 0.f), shininess * m_pGlossinessMap->Sample(vertex.uv).r) }; //glossinessMap is greyscale so all channels have the same value
 			return specular * observedArea;
 		}
 	}

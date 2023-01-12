@@ -58,7 +58,8 @@ namespace dae
 		int m_Width{};
 		int m_Height{};
 
-		Texture* m_pDiffuseTexture{};
+		Texture* m_pCombustionEffectDiffuseMap{};
+		Texture* m_pVehicleDiffuseTexture{};
 		Texture* m_pNormalMap{};
 		Texture* m_pSpecularMap{};
 		Texture* m_pGlossinessMap{};
@@ -79,6 +80,8 @@ namespace dae
 
 		RenderMode m_RenderMode{ RenderMode::combined };
 
+		Uint8* m_pBufferRValue{ new Uint8() }, * m_pBufferGValue{ new Uint8() }, * m_pBufferBValue{ new Uint8() };
+
 		//Function that transforms the vertices from the mesh from World space to Screen space
 		void VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const;
 		void VertexTransformationFunction(std::vector<Mesh>& meshes_world);
@@ -97,6 +100,6 @@ namespace dae
 
 		void W4_Part1();
 
-		ColorRGB ShadePixel(const Vertex_Out& vertex) const;
+		ColorRGBA ShadePixel(const Vertex_Out& vertex, int number) const;
 	};
 }
