@@ -31,7 +31,7 @@ namespace dae
 
 		Uint32 pixel{ m_pSurfacePixels[static_cast<int>(scaledUV.y) * m_pSurface->h + static_cast<int>(scaledUV.x)] };
 
-		Uint8 rValue{ }, gValue{ }, bValue{ },alphaValue{ };
+		Uint8 rValue{}, gValue{}, bValue{}, alphaValue{};
 		SDL_GetRGBA(pixel, m_pSurface->format, &rValue, &gValue, &bValue, &alphaValue);
 
 		return { rValue / 255.f, gValue / 255.f, bValue / 255.f, alphaValue / 255.f };

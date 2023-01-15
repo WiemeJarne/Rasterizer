@@ -30,11 +30,19 @@ namespace dae
 		TriangleStrip
 	};
 
+	enum class CullMode
+	{
+		FrontFaceCulling,
+		BackFaceCulling,
+		NoCulling
+	};
+
 	struct Mesh
 	{
 		std::vector<Vertex> vertices{};
 		std::vector<uint32_t> indices{};
 		PrimitiveTopology primitiveTopology{ PrimitiveTopology::TriangleStrip };
+		CullMode cullMode{};
 
 		std::vector<Vertex_Out> vertices_out{};
 		Matrix worldMatrix{};

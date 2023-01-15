@@ -40,6 +40,8 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	m_MeshesWorld = { Mesh{}, Mesh{} };
 	m_MeshesWorld[0].primitiveTopology = PrimitiveTopology::TriangeList;
 	m_MeshesWorld[1].primitiveTopology = PrimitiveTopology::TriangeList;
+	m_MeshesWorld[0].cullMode = CullMode::FrontFaceCulling;
+	m_MeshesWorld[1].cullMode = CullMode::NoCulling;
 
 	Utils::ParseOBJ("Resources/vehicle.obj", m_MeshesWorld[0].vertices, m_MeshesWorld[0].indices);
 	Utils::ParseOBJ("Resources/fireFX.obj", m_MeshesWorld[1].vertices, m_MeshesWorld[1].indices);
@@ -49,7 +51,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 		{1, 0, 0, 0},
 		{0, 1, 0, 0},
 		{0, 0, 1, 0},
-		{0, 0, 0, 1}
+		{0, 0, 50, 1}
 	};
 
 	m_MeshesWorld[1].worldMatrix =
@@ -57,13 +59,13 @@ Renderer::Renderer(SDL_Window* pWindow) :
 		{1, 0, 0, 0},
 		{0, 1, 0, 0},
 		{0, 0, 1, 0},
-		{0, 0, 0, 1}
+		{0, 0, 50, 1}
 	};
 
 	//Initialize Camera
 	//m_Camera.Initialize(60.f, { .0f,.0f,-10.f }, static_cast<float>(m_Width) / m_Height);
 	//m_Camera.Initialize(60.f, { 0.f, 5.f, -30.f }, static_cast<float>(m_Width) / m_Height);
-	m_Camera.Initialize(45.f, { 0.f, 0.f, -50.f }, static_cast<float>(m_Width) / m_Height);
+	m_Camera.Initialize(45.f, { 0.f, 0.f, 0.f }, static_cast<float>(m_Width) / m_Height);
 }
 
 Renderer::~Renderer()
@@ -81,7 +83,7 @@ void Renderer::Update(Timer* pTimer)
 
 	if (m_IsRotating)
 	{
-		float rotationSpeed{1.f};
+		float rotationSpeed{ 0.785398163 }; //in radians
 		m_MeshesWorld[0].rotationAngle += rotationSpeed * pTimer->GetElapsed();
 		m_MeshesWorld[0].worldMatrix = Matrix::CreateRotationY(m_MeshesWorld[0].rotationAngle) * Matrix::CreateTranslation(m_MeshesWorld[0].worldMatrix.GetTranslation());
 		m_MeshesWorld[1].rotationAngle += rotationSpeed * pTimer->GetElapsed();
@@ -182,7 +184,7 @@ void Renderer::VertexTransformationFunction(std::vector<Mesh>& meshes_world)
 			vertexOut.normal = mesh.worldMatrix.TransformVector(vertex.normal);
 			//set the tangent of the vertex
 			vertexOut.tangent = mesh.worldMatrix.TransformVector(vertex.tangent);
-			//set the viewDirection of the verex
+			//set the viewDirection of the vertex
 			vertexOut.viewDirection = m_Camera.origin - mesh.worldMatrix.TransformPoint(vertex.position);
 
 			mesh.vertices_out.emplace_back(vertexOut);
@@ -1475,19 +1477,31 @@ void Renderer::W4_Part1()
 				|| vertex1.position.z < 0.f || vertex1.position.z > 1.f
 				|| vertex2.position.z < 0.f || vertex2.position.z > 1.f) continue;
 
-			const Vector2 v0{ vertex0.position.x, vertex0.position.y };
-			const Vector2 v1{ vertex1.position.x, vertex1.position.y };
-			const Vector2 v2{ vertex2.position.x, vertex2.position.y };
-
 			float w0{};
 			float w1{};
 			float w2{};
+
+			const Vector2 v0{ vertex0.position.x, vertex0.position.y };
+			const Vector2 v1{ vertex1.position.x, vertex1.position.y };
+			const Vector2 v2{ vertex2.position.x, vertex2.position.y };
 
 			Vector2 v1ToV2{ v2 - v1 };
 			Vector2 v2ToV0{ v0 - v2 };
 			Vector2 v0ToV1{ v1 - v0 };
 
-			const float area{ Vector2::Cross(v0ToV1, v2 - v0) / 2.f };
+			//const float area{ Vector2::Cross(v0ToV1, v2 - v0) / 2.f };
+			const float area
+			{
+				(v1.x - v0.x) * (v2.y - v0.y) - (v1.y - v0.y) * (v2.x - v0.x)
+			};
+
+			bool isAreaNegative{ area < FLT_EPSILON };
+
+			if (mesh.cullMode == CullMode::FrontFaceCulling && isAreaNegative)
+				continue;
+
+			if (mesh.cullMode == CullMode::BackFaceCulling && !isAreaNegative)
+				continue;
 
 			Vector2 min = { std::min(v0.x, v1.x), std::min(v0.y, v1.y) };
 			min.x = std::min(min.x, v2.x);
@@ -1507,59 +1521,20 @@ void Renderer::W4_Part1()
 				{
 					Vector2 pixelPos = { static_cast<float>(px), static_cast<float>(py) };
 
+					if (!IsPixelInTriange(v0, v1, v2, pixelPos))
+						continue;
+
 					if (mesh.primitiveTopology == PrimitiveTopology::TriangleStrip && index & 0x01)
 					{
-						w0 = Vector2::Cross(v1ToV2, pixelPos - v1);
-
-						if (w0 > 0)
-						{
-							continue;
-						}
-
-						w1 = Vector2::Cross(v2ToV0, pixelPos - v2);
-
-						if (w1 > 0)
-						{
-							continue;
-						}
-
-						w2 = Vector2::Cross(v0ToV1, pixelPos - v0);
-
-						if (w2 > 0)
-						{
-							continue;
-						}
-
-						w0 = (w0 / 2.f) / (-1 * area);
-						w1 = (w1 / 2.f) / (-1 * area);
-						w2 = (w2 / 2.f) / (-1 * area);
+						w0 = (Vector2::Cross(v1ToV2, pixelPos - v1) / 2.f) / (-1 * area);
+						w1 = (Vector2::Cross(v2ToV0, pixelPos - v2) / 2.f) / (-1 * area);
+						w2 = (Vector2::Cross(v0ToV1, pixelPos - v0) / 2.f) / (-1 * area);
 					}
 					else
 					{
-						w0 = Vector2::Cross(v1ToV2, pixelPos - v1);
-
-						if (w0 < 0)
-						{
-							continue;
-						}
-
-						w1 = Vector2::Cross(v2ToV0, pixelPos - v2);
-
-						if (w1 < 0)
-						{
-							continue;
-						}
-
-						w2 = Vector2::Cross(v0ToV1, pixelPos - v0);
-
-						if (w2 < 0)
-						{
-							continue;
-						}
-
-						w0 = (w0 / 2.f) / area;
-						w1 = (w1 / 2.f) / area;
-						w2 = (w2 / 2.f) / area;
+						w0 = (Vector2::Cross(v1ToV2, pixelPos - v1) / 2.f) / area;
+						w1 = (Vector2::Cross(v2ToV0, pixelPos - v2) / 2.f) / area;
+						w2 = (Vector2::Cross(v0ToV1, pixelPos - v0) / 2.f) / area;
 					}
 
 					float depthInterpolated
@@ -1639,18 +1614,16 @@ void Renderer::W4_Part1()
 
 					if (number == 1)
 					{
-						SDL_GetRGB(m_pBackBufferPixels[static_cast<int>(pixel.position.x) + (static_cast<int>(pixel.position.y) * m_Width)], m_pBackBuffer->format, m_pBufferRValue, m_pBufferGValue, m_pBufferBValue);
+						Uint8 rValue{}, gValue{}, bValue{};
+						SDL_GetRGB(m_pBackBufferPixels[static_cast<int>(pixel.position.x) + (static_cast<int>(pixel.position.y) * m_Width)], m_pBackBuffer->format, &rValue, &gValue, &bValue);
 
 						finalColor.a = std::min(1.f, finalColor.a);
 
-						const float inverseAplha{ 1.f - finalColor.a };
-						const float division{ 1 / 255.f };
-
 						finalColor =
 						{
-							finalColor.r * finalColor.a + *m_pBufferRValue * division * inverseAplha,
-							finalColor.g * finalColor.a + *m_pBufferGValue * division * inverseAplha,
-							finalColor.b * finalColor.a + *m_pBufferBValue * division * inverseAplha 
+							finalColor.a * finalColor.r + (1.f - finalColor.a) * (rValue / 255.f),
+							finalColor.a * finalColor.g + (1.f - finalColor.a) * (gValue / 255.f),
+							finalColor.a * finalColor.b + (1.f - finalColor.a) * (bValue / 255.f)
 						};
 					}
 
@@ -1666,6 +1639,39 @@ void Renderer::W4_Part1()
 		}
 		++number;
 	}
+}
+
+bool Renderer::IsPixelInTriange(const Vector2& v0, const Vector2& v1, const Vector2& v2, const Vector2& pixelPos) const
+{
+	float cross1{ Vector2::Cross(v2 - v1, pixelPos - v1) };
+	bool cross1IsPositive{};
+
+	if (cross1 > 0)
+	{
+		cross1IsPositive = true;
+	}
+
+	float cross2{ Vector2::Cross(v0 - v2, pixelPos - v2) };
+	bool cross2IsPositive{};
+
+	if (cross2 > 0)
+	{
+		cross2IsPositive = true;
+	}
+
+	float cross3{ Vector2::Cross(v1 - v0, pixelPos - v0) };
+	bool cross3IsPositive{};
+
+	if (cross3 > 0)
+	{
+		cross3IsPositive = true;
+	}
+
+	if (	cross1IsPositive && cross2IsPositive && cross3IsPositive
+		|| !cross1IsPositive && !cross2IsPositive && !cross3IsPositive)
+		return true;
+
+	return false;
 }
 
 ColorRGBA Renderer::ShadePixel(const Vertex_Out& vertex, int number) const
