@@ -40,7 +40,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	m_MeshesWorld = { Mesh{}, Mesh{} };
 	m_MeshesWorld[0].primitiveTopology = PrimitiveTopology::TriangeList;
 	m_MeshesWorld[1].primitiveTopology = PrimitiveTopology::TriangeList;
-	m_MeshesWorld[0].cullMode = CullMode::FrontFaceCulling;
+	m_MeshesWorld[0].cullMode = CullMode::BackFaceCulling;
 	m_MeshesWorld[1].cullMode = CullMode::NoCulling;
 
 	Utils::ParseOBJ("Resources/vehicle.obj", m_MeshesWorld[0].vertices, m_MeshesWorld[0].indices);
@@ -1477,9 +1477,7 @@ void Renderer::W4_Part1()
 				|| vertex1.position.z < 0.f || vertex1.position.z > 1.f
 				|| vertex2.position.z < 0.f || vertex2.position.z > 1.f) continue;
 
-			float w0{};
-			float w1{};
-			float w2{};
+			
 
 			const Vector2 v0{ vertex0.position.x, vertex0.position.y };
 			const Vector2 v1{ vertex1.position.x, vertex1.position.y };
@@ -1489,31 +1487,21 @@ void Renderer::W4_Part1()
 			Vector2 v2ToV0{ v0 - v2 };
 			Vector2 v0ToV1{ v1 - v0 };
 
-			//const float area{ Vector2::Cross(v0ToV1, v2 - v0) / 2.f };
-			const float area
-			{
-				(v1.x - v0.x) * (v2.y - v0.y) - (v1.y - v0.y) * (v2.x - v0.x)
-			};
+			const float area{ Vector2::Cross(v0ToV1, v2 - v0) / 2.f };
 
-			bool isAreaNegative{ area < FLT_EPSILON };
-
-			if (mesh.cullMode == CullMode::FrontFaceCulling && isAreaNegative)
+			if (mesh.cullMode == CullMode::FrontFaceCulling && area > 0.f)
 				continue;
 
-			if (mesh.cullMode == CullMode::BackFaceCulling && !isAreaNegative)
+			if (mesh.cullMode == CullMode::BackFaceCulling && area < 0.f)
 				continue;
 
-			Vector2 min = { std::min(v0.x, v1.x), std::min(v0.y, v1.y) };
-			min.x = std::min(min.x, v2.x);
-			min.x = std::max(min.x, 0.f);
-			min.y = std::min(min.y, v2.y);
-			min.y = std::max(min.y, 0.f);
+			float w0{};
+			float w1{};
+			float w2{};
 
-			Vector2 max = { std::max(v0.x, v1.x), std::max(v0.y, v1.y) };
-			max.x = std::max(max.x, v2.x);
-			max.x = std::min(max.x, static_cast<float>(m_Width));
-			max.y = std::max(max.y, v2.y);
-			max.y = std::min(max.y, static_cast<float>(m_Height));
+			Vector2 min{};
+			Vector2 max{};
+			CalculateBoundingBox(v0, v1, v2, min, max);
 
 			for (int px{ static_cast<int>(min.x) }; px < max.x; ++px)
 			{
@@ -1530,7 +1518,7 @@ void Renderer::W4_Part1()
 						w1 = (Vector2::Cross(v2ToV0, pixelPos - v2) / 2.f) / (-1 * area);
 						w2 = (Vector2::Cross(v0ToV1, pixelPos - v0) / 2.f) / (-1 * area);
 					}
-					else
+					else if(mesh.primitiveTopology == PrimitiveTopology::TriangeList)
 					{
 						w0 = (Vector2::Cross(v1ToV2, pixelPos - v1) / 2.f) / area;
 						w1 = (Vector2::Cross(v2ToV0, pixelPos - v2) / 2.f) / area;
@@ -1672,6 +1660,26 @@ bool Renderer::IsPixelInTriange(const Vector2& v0, const Vector2& v1, const Vect
 		return true;
 
 	return false;
+}
+
+void Renderer::CalculateBoundingBox(const Vector2& v0, const Vector2& v1, const Vector2& v2, Vector2& min, Vector2& max)
+{
+	min = { std::min(v0.x, v1.x), std::min(v0.y, v1.y) };
+	min.x = std::min(min.x, v2.x);
+	min.x = std::max(min.x, 0.f);
+	min.y = std::min(min.y, v2.y);
+	min.y = std::max(min.y, 0.f);
+
+	max = { std::max(v0.x, v1.x), std::max(v0.y, v1.y) };
+	max.x = std::max(max.x, v2.x);
+	max.x = std::min(max.x, static_cast<float>(m_Width));
+	max.y = std::max(max.y, v2.y);
+	max.y = std::min(max.y, static_cast<float>(m_Height));
+}
+
+void RenderTriangle(const Vector2& v0, const Vector2& v1, const Vector2& v2, Vector2& min, Vector2& max)
+{
+
 }
 
 ColorRGBA Renderer::ShadePixel(const Vertex_Out& vertex, int number) const

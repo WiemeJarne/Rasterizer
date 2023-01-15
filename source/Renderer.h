@@ -99,6 +99,8 @@ namespace dae
 		void W4_Part1();
 
 		bool IsPixelInTriange(const Vector2& v0, const Vector2& v1, const Vector2& v2, const Vector2& pixelPos) const;
+		void CalculateBoundingBox(const Vector2& v0, const Vector2& v1, const Vector2& v2, Vector2& min, Vector2& max);
+		void RenderTriangle(const Vector2& v0, const Vector2& v1, const Vector2& v2, Vector2& min, Vector2& max);
 		ColorRGBA ShadePixel(const Vertex_Out& vertex, int number) const;
 	};
 }
