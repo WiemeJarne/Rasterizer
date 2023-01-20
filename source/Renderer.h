@@ -77,7 +77,7 @@ namespace dae
 			diffuse, //(incl. observed area)
 			specular //(incl. observed area)
 		};
-
+		int random{};
 		RenderMode m_RenderMode{ RenderMode::combined };
 
 		//Function that transforms the vertices from the mesh from World space to Screen space
