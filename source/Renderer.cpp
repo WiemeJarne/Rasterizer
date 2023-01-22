@@ -1436,6 +1436,7 @@ void Renderer::W3_Part2()
 void Renderer::W4_Part1()
 {
 	VertexTransformationFunction(m_MeshesWorld);
+	random = 0;
 	int number{};
 	const int amountOfMeshes{ static_cast<int>(m_MeshesWorld.size()) };
 	for (Mesh& mesh : m_MeshesWorld)
@@ -1477,8 +1478,6 @@ void Renderer::W4_Part1()
 				|| vertex1.position.z < 0.f || vertex1.position.z > 1.f
 				|| vertex2.position.z < 0.f || vertex2.position.z > 1.f) continue;
 
-			
-
 			const Vector2 v0{ vertex0.position.x, vertex0.position.y };
 			const Vector2 v1{ vertex1.position.x, vertex1.position.y };
 			const Vector2 v2{ vertex2.position.x, vertex2.position.y };
@@ -1490,7 +1489,10 @@ void Renderer::W4_Part1()
 			const float area{ Vector2::Cross(v0ToV1, v2 - v0) / 2.f };
 
 			if (mesh.cullMode == CullMode::FrontFaceCulling && area > 0.f)
+			{
+				++random;
 				continue;
+			}
 
 			if (mesh.cullMode == CullMode::BackFaceCulling && area < 0.f)
 				continue;
@@ -1627,6 +1629,7 @@ void Renderer::W4_Part1()
 		}
 		++number;
 	}
+	std::cout << random << '\n';
 }
 
 bool Renderer::IsPixelInTriange(const Vector2& v0, const Vector2& v1, const Vector2& v2, const Vector2& pixelPos) const
