@@ -40,7 +40,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	m_MeshesWorld = { Mesh{}, Mesh{} };
 	m_MeshesWorld[0].primitiveTopology = PrimitiveTopology::TriangeList;
 	m_MeshesWorld[1].primitiveTopology = PrimitiveTopology::TriangeList;
-	m_MeshesWorld[0].cullMode = CullMode::BackFaceCulling;
+	m_MeshesWorld[0].cullMode = CullMode::FrontFaceCulling;
 	m_MeshesWorld[1].cullMode = CullMode::NoCulling;
 
 	Utils::ParseOBJ("Resources/vehicle.obj", m_MeshesWorld[0].vertices, m_MeshesWorld[0].indices);
